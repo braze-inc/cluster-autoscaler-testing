@@ -90,6 +90,7 @@ func multiStringFlag(name string, usage string) *MultiStringFlag {
 }
 
 var (
+	labelSelector           = flag.String("label-selector", "", "label to use as selector for pods")
 	clusterName             = flag.String("cluster-name", "", "Autoscaled cluster name, if available")
 	address                 = flag.String("address", ":8085", "The address to expose prometheus metrics.")
 	kubernetes              = flag.String("kubernetes", "", "Kubernetes master location. Leave blank for default")
@@ -260,6 +261,7 @@ func createAutoscalingOptions() config.AutoscalingOptions {
 			ScaleDownUnreadyTime:             *scaleDownUnreadyTime,
 			MaxNodeProvisionTime:             *maxNodeProvisionTime,
 		},
+		LabelSelector:                    *labelSelector,
 		CloudConfig:                      *cloudConfig,
 		CloudProviderName:                *cloudProviderFlag,
 		NodeGroupAutoDiscovery:           *nodeGroupAutoDiscoveryFlag,

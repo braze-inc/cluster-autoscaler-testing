@@ -31,6 +31,7 @@ import (
 	v1lister "k8s.io/client-go/listers/core/v1"
 	v1policylister "k8s.io/client-go/listers/policy/v1"
 	"k8s.io/client-go/tools/cache"
+	klog "k8s.io/klog/v2"
 	podv1 "k8s.io/kubernetes/pkg/api/v1/pod"
 )
 
@@ -150,7 +151,7 @@ func (r listerRegistryImpl) StatefulSetLister() v1appslister.StatefulSetLister {
 
 // PodLister lists pods.
 type PodLister interface {
-	List() ([]*apiv1.Pod, error)
+	List(s ...labels.Selector) ([]*apiv1.Pod, error)
 }
 
 // ScheduledPodLister lists scheduled pods.
@@ -159,7 +160,7 @@ type ScheduledPodLister struct {
 }
 
 // List returns all scheduled pods.
-func (lister *ScheduledPodLister) List() ([]*apiv1.Pod, error) {
+func (lister *ScheduledPodLister) List(s ...labels.Selector) ([]*apiv1.Pod, error) {
 	return lister.podLister.List(labels.Everything())
 }
 
@@ -180,7 +181,7 @@ func NewScheduledPodLister(kubeClient client.Interface, stopchannel <-chan struc
 
 // ScheduledAndUnschedulablePodLister lists scheduled and unschedulable pods obtained at the same point in time.
 type ScheduledAndUnschedulablePodLister interface {
-	List() (scheduledPods, unschedulablePods []*apiv1.Pod, err error)
+	List(s ...labels.Selector) (scheduledPods, unschedulablePods []*apiv1.Pod, err error)
 }
 
 // ScheduledAndUnschedulablePodLister lists scheduled and unschedulable pods.
@@ -189,8 +190,10 @@ type scheduledAndUnschedulablePodLister struct {
 }
 
 // List returns all scheduled and unschedulable pods.
-func (lister *scheduledAndUnschedulablePodLister) List() (scheduledPods []*apiv1.Pod, unschedulablePods []*apiv1.Pod, err error) {
-	allPods, err := lister.podLister.List(labels.Everything())
+func (lister *scheduledAndUnschedulablePodLister) List(s ...labels.Selector) (scheduledPods []*apiv1.Pod, unschedulablePods []*apiv1.Pod, err error) {
+	klog.Infof("++++ in scheduledAndUnSchedulablePodLister.List() - selector: %v\n", s)
+	//allPods, err := lister.podLister.List(labels.Everything())
+	allPods, err := lister.podLister.List(s[0])
 	if err != nil {
 		return scheduledPods, unschedulablePods, err
 	}
@@ -204,6 +207,7 @@ func (lister *scheduledAndUnschedulablePodLister) List() (scheduledPods []*apiv1
 			unschedulablePods = append(unschedulablePods, pod)
 		}
 	}
+	klog.Info("pod counts - scheduled, unscheduleable pods: ", len(scheduledPods), len(unschedulablePods))
 	return scheduledPods, unschedulablePods, nil
 }
 
@@ -293,7 +297,7 @@ func filterNodes(nodes []*apiv1.Node, predicate func(*apiv1.Node) bool) []*apiv1
 
 // PodDisruptionBudgetLister lists pod disruption budgets.
 type PodDisruptionBudgetLister interface {
-	List() ([]*policyv1.PodDisruptionBudget, error)
+	List(s ...labels.Selector) ([]*policyv1.PodDisruptionBudget, error)
 }
 
 // PodDisruptionBudgetListerImpl lists pod disruption budgets
@@ -302,7 +306,7 @@ type PodDisruptionBudgetListerImpl struct {
 }
 
 // List returns all pdbs
-func (lister *PodDisruptionBudgetListerImpl) List() ([]*policyv1.PodDisruptionBudget, error) {
+func (lister *PodDisruptionBudgetListerImpl) List(s ...labels.Selector) ([]*policyv1.PodDisruptionBudget, error) {
 	return lister.pdbLister.List(labels.Everything())
 }
 

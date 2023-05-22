@@ -70,7 +70,7 @@ type podListerMock struct {
 	mock.Mock
 }
 
-func (l *podListerMock) List() ([]*apiv1.Pod, error) {
+func (l *podListerMock) List(s ...labels.Selector) ([]*apiv1.Pod, error) {
 	args := l.Called()
 	return args.Get(0).([]*apiv1.Pod), args.Error(1)
 }
@@ -79,7 +79,7 @@ type scheduledAndUnschedulablePodListerMock struct {
 	mock.Mock
 }
 
-func (l *scheduledAndUnschedulablePodListerMock) List() (scheduledPods []*apiv1.Pod, unschedulablePods []*apiv1.Pod, err error) {
+func (l *scheduledAndUnschedulablePodListerMock) List(s ...labels.Selector) (scheduledPods []*apiv1.Pod, unschedulablePods []*apiv1.Pod, err error) {
 	args := l.Called()
 	return args.Get(0).([]*apiv1.Pod), args.Get(1).([]*apiv1.Pod), args.Error(2)
 }
@@ -88,7 +88,7 @@ type podDisruptionBudgetListerMock struct {
 	mock.Mock
 }
 
-func (l *podDisruptionBudgetListerMock) List() ([]*policyv1.PodDisruptionBudget, error) {
+func (l *podDisruptionBudgetListerMock) List(s ...labels.Selector) ([]*policyv1.PodDisruptionBudget, error) {
 	args := l.Called()
 	return args.Get(0).([]*policyv1.PodDisruptionBudget), args.Error(1)
 }
