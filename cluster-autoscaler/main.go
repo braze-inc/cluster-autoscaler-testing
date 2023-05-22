@@ -90,6 +90,8 @@ func multiStringFlag(name string, usage string) *MultiStringFlag {
 }
 
 var (
+	// TODO: should each List() function have its own label option? or is it okay to use the same one for everything?
+	labelSelector           = flag.String("label-selector", "", "label to use as selector for pods")
 	clusterName             = flag.String("cluster-name", "", "Autoscaled cluster name, if available")
 	address                 = flag.String("address", ":8085", "The address to expose prometheus metrics.")
 	kubernetes              = flag.String("kubernetes", "", "Kubernetes master location. Leave blank for default")
@@ -260,6 +262,7 @@ func createAutoscalingOptions() config.AutoscalingOptions {
 			ScaleDownUnreadyTime:             *scaleDownUnreadyTime,
 			MaxNodeProvisionTime:             *maxNodeProvisionTime,
 		},
+		LabelSelector:                    *labelSelector,
 		CloudConfig:                      *cloudConfig,
 		CloudProviderName:                *cloudProviderFlag,
 		NodeGroupAutoDiscovery:           *nodeGroupAutoDiscoveryFlag,

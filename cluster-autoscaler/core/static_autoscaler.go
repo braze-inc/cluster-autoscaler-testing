@@ -20,10 +20,12 @@ import (
 	"errors"
 	"fmt"
 	"reflect"
+	"strings"
 	"time"
 
 	apiv1 "k8s.io/api/core/v1"
 	"k8s.io/apimachinery/pkg/labels"
+	"k8s.io/apimachinery/pkg/selection"
 	"k8s.io/autoscaler/cluster-autoscaler/core/scaledown/pdb"
 	"k8s.io/autoscaler/cluster-autoscaler/core/scaledown/planner"
 	scaledownstatus "k8s.io/autoscaler/cluster-autoscaler/core/scaledown/status"
@@ -276,6 +278,7 @@ func (a *StaticAutoscaler) initializeRemainingPdbTracker() caerrors.AutoscalerEr
 
 // RunOnce iterates over node groups and scales them up/down if necessary
 func (a *StaticAutoscaler) RunOnce(currentTime time.Time) caerrors.AutoscalerError {
+	klog.Infof("+++ selector: %v\n", a.AutoscalingOptions.LabelSelector)
 	a.cleanUpIfRequired()
 	a.processorCallbacks.reset()
 	a.clusterStateRegistry.PeriodicCleanup()
@@ -286,6 +289,7 @@ func (a *StaticAutoscaler) RunOnce(currentTime time.Time) caerrors.AutoscalerErr
 	autoscalingContext := a.AutoscalingContext
 
 	klog.V(4).Info("Starting main loop")
+	klog.Info("in RunOnce()")
 
 	stateUpdateStart := time.Now()
 
@@ -301,10 +305,25 @@ func (a *StaticAutoscaler) RunOnce(currentTime time.Time) caerrors.AutoscalerErr
 		return err
 	}
 
-	originalScheduledPods, unschedulablePods, err := scheduledAndUnschedulablePodLister.List()
-	if err != nil {
-		klog.Errorf("Failed to list scheduled and unschedulable pods: %v", err)
-		return caerrors.ToAutoscalerError(caerrors.ApiCallError, err)
+	var originalScheduledPods, unschedulablePods []*apiv1.Pod
+	var _err error
+	if a.AutoscalingOptions.LabelSelector != "" {
+		klog.Info("selector IS NOT EMPTY")
+		_split := strings.Split(a.AutoscalingOptions.LabelSelector, "=")
+		_requirements, _ := labels.NewRequirement(_split[0], selection.Equals, []string{_split[1]})
+		klog.Infof("requirements: %v\n", _requirements.String())
+		_selector := labels.NewSelector()
+		_selector = _selector.Add(*_requirements)
+		klog.Infof("_selector: %v\n", _selector.String())
+		originalScheduledPods, unschedulablePods, _err = scheduledAndUnschedulablePodLister.List(_selector)
+	} else {
+		klog.Info("selector IS EMPTY")
+		klog.Info("calling lister without selector")
+		originalScheduledPods, unschedulablePods, _err = scheduledAndUnschedulablePodLister.List(labels.Everything())
+	}
+	if _err != nil {
+		klog.Errorf("Failed to list scheduled and unschedulable pods: %v", _err)
+		return caerrors.ToAutoscalerError(caerrors.ApiCallError, _err)
 	}
 
 	// Update cluster resource usage metrics
@@ -317,8 +336,7 @@ func (a *StaticAutoscaler) RunOnce(currentTime time.Time) caerrors.AutoscalerErr
 		klog.Errorf("Failed to get daemonset list: %v", err)
 		return caerrors.ToAutoscalerError(caerrors.ApiCallError, err)
 	}
-	// Snapshot scale-down actuation status before cache refresh.
-	scaleDownActuationStatus := a.scaleDownActuator.CheckStatus()
+
 	// Call CloudProvider.Refresh before any other calls to cloud provider.
 	refreshStart := time.Now()
 	err = a.AutoscalingContext.CloudProvider.Refresh()
@@ -597,7 +615,8 @@ func (a *StaticAutoscaler) RunOnce(currentTime time.Time) caerrors.AutoscalerErr
 			}
 		}
 
-		typedErr := a.scaleDownPlanner.UpdateClusterState(podDestinations, scaleDownCandidates, scaleDownActuationStatus, currentTime)
+		actuationStatus := a.scaleDownActuator.CheckStatus()
+		typedErr := a.scaleDownPlanner.UpdateClusterState(podDestinations, scaleDownCandidates, actuationStatus, currentTime)
 		// Update clusterStateRegistry and metrics regardless of whether ScaleDown was successful or not.
 		unneededNodes := a.scaleDownPlanner.UnneededNodes()
 		a.processors.ScaleDownCandidatesNotifier.Update(unneededNodes, currentTime)
@@ -628,7 +647,7 @@ func (a *StaticAutoscaler) RunOnce(currentTime time.Time) caerrors.AutoscalerErr
 
 			// We want to delete unneeded Node Groups only if there was no recent scale up,
 			// and there is no current delete in progress and there was no recent errors.
-			_, drained := scaleDownActuationStatus.DeletionsInProgress()
+			_, drained := actuationStatus.DeletionsInProgress()
 			var removedNodeGroups []cloudprovider.NodeGroup
 			if len(drained) == 0 {
 				var err error
