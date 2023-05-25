@@ -35,6 +35,8 @@ import (
 	"github.com/spf13/pflag"
 
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
+	"k8s.io/apimachinery/pkg/labels"
+	"k8s.io/apimachinery/pkg/selection"
 	"k8s.io/apiserver/pkg/server/mux"
 	"k8s.io/apiserver/pkg/server/routes"
 	utilfeature "k8s.io/apiserver/pkg/util/feature"
@@ -253,6 +255,20 @@ func createAutoscalingOptions() config.AutoscalingOptions {
 	if *maxDrainParallelismFlag > 1 && !*parallelDrain {
 		klog.Fatalf("Invalid configuration, could not use --max-drain-parallelism > 1 if --parallel-drain is false")
 	}
+
+	// create selectors
+	var _selector labels.Selector
+	if *labelSelector == "" {
+		_selector = labels.Everything()
+	} else {
+		splitLabel := strings.Split(*labelSelector, "=")
+		_requirements, err := labels.NewRequirement(splitLabel[0], selection.Equals, []string{splitLabel[1]})
+		if err != nil {
+			klog.Fatal("label selector requirement validation failed")
+		}
+		_selector = labels.NewSelector()
+		_selector = _selector.Add(*_requirements)
+	}
 	return config.AutoscalingOptions{
 		NodeGroupDefaults: config.NodeGroupAutoscalingOptions{
 			ScaleDownUtilizationThreshold:    *scaleDownUtilizationThreshold,
@@ -261,7 +277,7 @@ func createAutoscalingOptions() config.AutoscalingOptions {
 			ScaleDownUnreadyTime:             *scaleDownUnreadyTime,
 			MaxNodeProvisionTime:             *maxNodeProvisionTime,
 		},
-		LabelSelector:                    *labelSelector,
+		LabelSelector:                    _selector,
 		CloudConfig:                      *cloudConfig,
 		CloudProviderName:                *cloudProviderFlag,
 		NodeGroupAutoDiscovery:           *nodeGroupAutoDiscoveryFlag,

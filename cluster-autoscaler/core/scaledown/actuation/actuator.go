@@ -256,7 +256,7 @@ func (a *Actuator) deleteNodesAsync(nodes []*apiv1.Node, groupIds []string, drai
 	}
 
 	if drain {
-		pdbs, err = a.ctx.PodDisruptionBudgetLister().List()
+		pdbs, err = a.ctx.PodDisruptionBudgetLister().List(a.ctx.LabelSelector)
 		if err != nil {
 			klog.Errorf("Scale-down: couldn't fetch pod disruption budgets, err: %v", err)
 			nodeDeleteResult := status.NodeDeleteResult{ResultType: status.NodeDeleteErrorInternal, Err: errors.NewAutoscalerError(errors.InternalError, "podDisruptionBudgetLister.List returned error %v", err)}
@@ -372,7 +372,7 @@ func (a *Actuator) createSnapshot(nodes []*apiv1.Node) (clustersnapshot.ClusterS
 	knownNodes := make(map[string]bool)
 	snapshot := clustersnapshot.NewBasicClusterSnapshot()
 
-	scheduledPods, err := a.ctx.ScheduledPodLister().List()
+	scheduledPods, err := a.ctx.ScheduledPodLister().List(a.ctx.LabelSelector)
 	if err != nil {
 		return nil, err
 	}

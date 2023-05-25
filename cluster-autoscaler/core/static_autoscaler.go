@@ -262,7 +262,7 @@ func (a *StaticAutoscaler) initializeClusterSnapshot(nodes []*apiv1.Node, schedu
 func (a *StaticAutoscaler) initializeRemainingPdbTracker() caerrors.AutoscalerError {
 	a.RemainingPdbTracker.Clear()
 
-	pdbs, err := a.PodDisruptionBudgetLister().List()
+	pdbs, err := a.PodDisruptionBudgetLister().List(a.LabelSelector)
 	if err != nil {
 		klog.Errorf("Failed to list pod disruption budgets: %v", err)
 		return caerrors.NewAutoscalerError(caerrors.ApiCallError, err.Error())
@@ -301,7 +301,7 @@ func (a *StaticAutoscaler) RunOnce(currentTime time.Time) caerrors.AutoscalerErr
 		return err
 	}
 
-	originalScheduledPods, unschedulablePods, err := scheduledAndUnschedulablePodLister.List()
+	originalScheduledPods, unschedulablePods, err := scheduledAndUnschedulablePodLister.List(a.LabelSelector)
 	if err != nil {
 		klog.Errorf("Failed to list scheduled and unschedulable pods: %v", err)
 		return caerrors.ToAutoscalerError(caerrors.ApiCallError, err)
@@ -350,7 +350,7 @@ func (a *StaticAutoscaler) RunOnce(currentTime time.Time) caerrors.AutoscalerErr
 		return typedErr.AddPrefix("failed to initialize RemainingPdbTracker: ")
 	}
 
-	nodeInfosForGroups, autoscalerError := a.processors.TemplateNodeInfoProvider.Process(autoscalingContext, readyNodes, daemonsets, a.taintConfig, currentTime)
+	nodeInfosForGroups, autoscalerError := a.processors.TemplateNodeInfoProvider.Process(autoscalingContext, readyNodes, daemonsets, a.taintConfig, currentTime, a.LabelSelector)
 	if autoscalerError != nil {
 		klog.Errorf("Failed to get node infos for groups: %v", autoscalerError)
 		return autoscalerError.AddPrefix("failed to build node infos for node groups: ")

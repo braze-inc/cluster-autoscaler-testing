@@ -18,6 +18,8 @@ package config
 
 import (
 	"time"
+
+	"k8s.io/apimachinery/pkg/labels"
 )
 
 // GpuLimits define lower and upper bound on GPU instances of given type in cluster
@@ -89,7 +91,7 @@ func NewDefaultNodeGroupDifferenceRatios() NodeGroupDifferenceRatios {
 // AutoscalingOptions contain various options to customize how autoscaling works
 type AutoscalingOptions struct {
 	// selector testing - salman
-	LabelSelector string
+	LabelSelector labels.Selector
 	// NodeGroupDefaults are default values for per NodeGroup options.
 	// They will be used any time a specific value is not provided for a given NodeGroup.
 	NodeGroupDefaults NodeGroupAutoscalingOptions

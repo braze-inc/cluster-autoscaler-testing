@@ -22,6 +22,7 @@ import (
 
 	appsv1 "k8s.io/api/apps/v1"
 	apiv1 "k8s.io/api/core/v1"
+	"k8s.io/apimachinery/pkg/labels"
 	"k8s.io/autoscaler/cluster-autoscaler/cloudprovider"
 	"k8s.io/autoscaler/cluster-autoscaler/context"
 	"k8s.io/autoscaler/cluster-autoscaler/core/utils"
@@ -72,13 +73,13 @@ func (p *MixedTemplateNodeInfoProvider) CleanUp() {
 }
 
 // Process returns the nodeInfos set for this cluster
-func (p *MixedTemplateNodeInfoProvider) Process(ctx *context.AutoscalingContext, nodes []*apiv1.Node, daemonsets []*appsv1.DaemonSet, taintConfig taints.TaintConfig, now time.Time) (map[string]*schedulerframework.NodeInfo, errors.AutoscalerError) {
+func (p *MixedTemplateNodeInfoProvider) Process(ctx *context.AutoscalingContext, nodes []*apiv1.Node, daemonsets []*appsv1.DaemonSet, taintConfig taints.TaintConfig, now time.Time, selector labels.Selector) (map[string]*schedulerframework.NodeInfo, errors.AutoscalerError) {
 	// TODO(mwielgus): This returns map keyed by url, while most code (including scheduler) uses node.Name for a key.
 	// TODO(mwielgus): Review error policy - sometimes we may continue with partial errors.
 	result := make(map[string]*schedulerframework.NodeInfo)
 	seenGroups := make(map[string]bool)
 
-	podsForNodes, err := getPodsForNodes(ctx.ListerRegistry)
+	podsForNodes, err := getPodsForNodes(ctx.ListerRegistry, selector)
 	if err != nil {
 		return map[string]*schedulerframework.NodeInfo{}, err
 	}
@@ -194,8 +195,8 @@ func (p *MixedTemplateNodeInfoProvider) Process(ctx *context.AutoscalingContext,
 	return result, nil
 }
 
-func getPodsForNodes(listers kube_util.ListerRegistry) (map[string][]*apiv1.Pod, errors.AutoscalerError) {
-	pods, err := listers.ScheduledPodLister().List()
+func getPodsForNodes(listers kube_util.ListerRegistry, selector labels.Selector) (map[string][]*apiv1.Pod, errors.AutoscalerError) {
+	pods, err := listers.ScheduledPodLister().List(selector)
 	if err != nil {
 		return nil, errors.ToAutoscalerError(errors.ApiCallError, err)
 	}
