@@ -279,6 +279,13 @@ func createAutoscalingOptions() config.AutoscalingOptions {
 		_podSelectorOperator = selection.NotEquals
 	}
 
+	_podRequirements, err := labels.NewRequirement(_podLabel, _podSelectorOperator, []string{_podLabelvalue})
+	if err != nil {
+		klog.Fatal("label selector requirement validation failed")
+	}
+	_podSelector = labels.NewSelector()
+	_podSelector = _podSelector.Add(*_podRequirements)
+
 	if *nodeLabelSelector == "" && *excludeNodeLabelSelector == "" {
 		_nodeSelector = labels.Everything()
 	} else if *nodeLabelSelector != "" {
@@ -286,18 +293,12 @@ func createAutoscalingOptions() config.AutoscalingOptions {
 		_nodeLabel = splitLabel[0]
 		_nodeLabelvalue = splitLabel[1]
 		_nodeSelectorOperator = selection.Equals
-	} else if *excludePodLabelSelector != "" {
-		splitLabel := strings.Split(*excludePodLabelSelector, "=")
+	} else if *excludeNodeLabelSelector != "" {
+		splitLabel := strings.Split(*excludeNodeLabelSelector, "=")
 		_nodeLabel = splitLabel[0]
 		_nodeLabelvalue = splitLabel[1]
 		_nodeSelectorOperator = selection.NotEquals
 	}
-	_podRequirements, err := labels.NewRequirement(_podLabel, _podSelectorOperator, []string{_podLabelvalue})
-	if err != nil {
-		klog.Fatal("label selector requirement validation failed")
-	}
-	_podSelector = labels.NewSelector()
-	_podSelector = _podSelector.Add(*_podRequirements)
 
 	_nodeRequirements, err := labels.NewRequirement(_nodeLabel, _nodeSelectorOperator, []string{_nodeLabelvalue})
 	if err != nil {

@@ -264,6 +264,8 @@ func (l *nodeListerImpl) List(selector labels.Selector) ([]*apiv1.Node, error) {
 	var nodes []*apiv1.Node
 	var err error
 
+	klog.Infof("+++ using %v as selector for listing nodes", selector.String())
+
 	//nodes, err = l.nodeLister.List(labels.Everything())
 	nodes, err = l.nodeLister.List(selector)
 	if err != nil {
