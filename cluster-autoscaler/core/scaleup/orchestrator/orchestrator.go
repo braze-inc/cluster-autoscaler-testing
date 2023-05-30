@@ -157,7 +157,7 @@ func (o *ScaleUpOrchestrator) ScaleUp(
 	}
 
 	// Pick some expansion option.
-	bestOption := o.autoscalingContext.ExpanderStrategy.BestOption(options, nodeInfos)
+	bestOption := o.autoscalingContext.ExpanderStrategy.BestOption(options, nodeInfos, o.autoscalingContext.NodeSelector)
 	if bestOption == nil || bestOption.NodeCount <= 0 {
 		return &status.ScaleUpStatus{
 			Result:                  status.ScaleUpNoOptionsAvailable,

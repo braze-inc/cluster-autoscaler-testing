@@ -23,6 +23,7 @@ import (
 
 	"gopkg.in/yaml.v2"
 
+	"k8s.io/apimachinery/pkg/labels"
 	"k8s.io/autoscaler/cluster-autoscaler/expander"
 
 	apiv1 "k8s.io/api/core/v1"
@@ -116,7 +117,7 @@ func (p *priority) parsePrioritiesYAMLString(prioritiesYAML string) (priorities,
 	return newPriorities, nil
 }
 
-func (p *priority) BestOptions(expansionOptions []expander.Option, nodeInfo map[string]*schedulerframework.NodeInfo) []expander.Option {
+func (p *priority) BestOptions(expansionOptions []expander.Option, nodeInfo map[string]*schedulerframework.NodeInfo, nodeSelector labels.Selector) []expander.Option {
 	if len(expansionOptions) <= 0 {
 		return nil
 	}

@@ -92,6 +92,7 @@ func NewDefaultNodeGroupDifferenceRatios() NodeGroupDifferenceRatios {
 type AutoscalingOptions struct {
 	// selector testing - salman
 	LabelSelector labels.Selector
+	NodeSelector  labels.Selector
 	// NodeGroupDefaults are default values for per NodeGroup options.
 	// They will be used any time a specific value is not provided for a given NodeGroup.
 	NodeGroupDefaults NodeGroupAutoscalingOptions

@@ -18,13 +18,14 @@ package price
 
 import (
 	apiv1 "k8s.io/api/core/v1"
+	"k8s.io/apimachinery/pkg/labels"
 )
 
 // PreferredNodeProvider provides a node that would be, in-longer run, the most suited to the cluster
 // needs.
 type PreferredNodeProvider interface {
 	// Node returns the preferred node for the cluster
-	Node() (*apiv1.Node, error)
+	Node(nodeSelector labels.Selector) (*apiv1.Node, error)
 }
 
 // NodeUnfitness is a function that returns a value that how much the evaluated node is "different"

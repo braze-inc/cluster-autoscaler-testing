@@ -22,6 +22,7 @@ import (
 	"time"
 
 	v1 "k8s.io/api/core/v1"
+	"k8s.io/apimachinery/pkg/labels"
 	"k8s.io/autoscaler/cluster-autoscaler/expander"
 	"k8s.io/autoscaler/cluster-autoscaler/expander/grpcplugin/protos"
 	"k8s.io/klog/v2"
@@ -72,7 +73,7 @@ func createGRPCClient(expanderCert string, expanderUrl string) protos.ExpanderCl
 	return protos.NewExpanderClient(conn)
 }
 
-func (g *grpcclientstrategy) BestOptions(expansionOptions []expander.Option, nodeInfo map[string]*schedulerframework.NodeInfo) []expander.Option {
+func (g *grpcclientstrategy) BestOptions(expansionOptions []expander.Option, nodeInfo map[string]*schedulerframework.NodeInfo, nodeSelector labels.Selector) []expander.Option {
 	if g.grpcClient == nil {
 		klog.Errorf("Incorrect gRPC client config, filtering no options")
 		return expansionOptions

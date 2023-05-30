@@ -17,6 +17,7 @@ limitations under the License.
 package factory
 
 import (
+	"k8s.io/apimachinery/pkg/labels"
 	"k8s.io/autoscaler/cluster-autoscaler/cloudprovider"
 	"k8s.io/autoscaler/cluster-autoscaler/context"
 	"k8s.io/autoscaler/cluster-autoscaler/expander"
@@ -78,7 +79,7 @@ func (f *Factory) Build(names []string) (expander.Strategy, errors.AutoscalerErr
 }
 
 // RegisterDefaultExpanders is a convenience function, registering all known expanders in the Factory.
-func (f *Factory) RegisterDefaultExpanders(cloudProvider cloudprovider.CloudProvider, autoscalingKubeClients *context.AutoscalingKubeClients, kubeClient kube_client.Interface, configNamespace string, GRPCExpanderCert string, GRPCExpanderURL string) {
+func (f *Factory) RegisterDefaultExpanders(cloudProvider cloudprovider.CloudProvider, autoscalingKubeClients *context.AutoscalingKubeClients, kubeClient kube_client.Interface, configNamespace string, GRPCExpanderCert string, GRPCExpanderURL string, nodeSelector labels.Selector) {
 	f.RegisterFilter(expander.RandomExpanderName, random.NewFilter)
 	f.RegisterFilter(expander.MostPodsExpanderName, mostpods.NewFilter)
 	f.RegisterFilter(expander.LeastWasteExpanderName, waste.NewFilter)

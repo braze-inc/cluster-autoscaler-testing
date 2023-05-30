@@ -223,7 +223,7 @@ func (a *StaticAutoscaler) cleanUpIfRequired() {
 	}
 
 	// CA can die at any time. Removing taints that might have been left from the previous run.
-	if allNodes, err := a.AllNodeLister().List(); err != nil {
+	if allNodes, err := a.AllNodeLister().List(a.NodeSelector); err != nil {
 		klog.Errorf("Failed to list ready nodes, not cleaning up taints: %v", err)
 	} else {
 		taints.CleanAllToBeDeleted(allNodes,
@@ -867,12 +867,12 @@ func (a *StaticAutoscaler) ExitCleanUp() {
 }
 
 func (a *StaticAutoscaler) obtainNodeLists(cp cloudprovider.CloudProvider) ([]*apiv1.Node, []*apiv1.Node, caerrors.AutoscalerError) {
-	allNodes, err := a.AllNodeLister().List()
+	allNodes, err := a.AllNodeLister().List(a.NodeSelector)
 	if err != nil {
 		klog.Errorf("Failed to list all nodes: %v", err)
 		return nil, nil, caerrors.ToAutoscalerError(caerrors.ApiCallError, err)
 	}
-	readyNodes, err := a.ReadyNodeLister().List()
+	readyNodes, err := a.ReadyNodeLister().List(a.NodeSelector)
 	if err != nil {
 		klog.Errorf("Failed to list ready nodes: %v", err)
 		return nil, nil, caerrors.ToAutoscalerError(caerrors.ApiCallError, err)

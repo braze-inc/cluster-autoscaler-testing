@@ -24,6 +24,7 @@ import (
 	apiv1 "k8s.io/api/core/v1"
 	"k8s.io/apimachinery/pkg/api/resource"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
+	"k8s.io/apimachinery/pkg/labels"
 	"k8s.io/autoscaler/cluster-autoscaler/cloudprovider"
 	"k8s.io/autoscaler/cluster-autoscaler/expander"
 	"k8s.io/autoscaler/cluster-autoscaler/utils/gpu"
@@ -87,13 +88,13 @@ func NewFilter(cloudProvider cloudprovider.CloudProvider,
 }
 
 // BestOption selects option based on cost and preferred node type.
-func (p *priceBased) BestOptions(expansionOptions []expander.Option, nodeInfos map[string]*schedulerframework.NodeInfo) []expander.Option {
+func (p *priceBased) BestOptions(expansionOptions []expander.Option, nodeInfos map[string]*schedulerframework.NodeInfo, nodeSelector labels.Selector) []expander.Option {
 	var bestOptions []expander.Option
 	bestOptionScore := 0.0
 	now := time.Now()
 	then := now.Add(time.Hour)
 
-	preferredNode, err := p.preferredNodeProvider.Node()
+	preferredNode, err := p.preferredNodeProvider.Node(nodeSelector)
 	if err != nil {
 		klog.Errorf("Failed to get preferred node, switching to default: %v", err)
 		preferredNode = defaultPreferredNode
