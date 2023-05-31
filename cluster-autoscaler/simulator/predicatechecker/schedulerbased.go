@@ -142,9 +142,13 @@ func (p *SchedulerBasedPredicateChecker) CheckPredicates(clusterSnapshot cluster
 	}
 	nodeInfo, err := clusterSnapshot.NodeInfos().Get(nodeName)
 	if err != nil {
+		klog.Infof("+++ error getting node info for %s, %v\n", nodeName, err)
 		errorMessage := fmt.Sprintf("Error obtaining NodeInfo for name %s; %v", nodeName, err)
 		return NewPredicateError(InternalPredicateError, "", errorMessage, nil, emptyString)
 	}
+	klog.Infof("+++ %s: Allocatable AllowedPodNumber: %v, Memory: %v, CPU: %v", nodeName, nodeInfo.Allocatable.AllowedPodNumber, nodeInfo.Allocatable.Memory, nodeInfo.Allocatable.MilliCPU)
+	klog.Infof("+++ %s: Requested AllowedPodNumber: %v Memory: %v, CPU: %v", nodeName, nodeInfo.Requested.AllowedPodNumber, nodeInfo.Requested.Memory, nodeInfo.Requested.MilliCPU)
+	klog.Infof("+++ %s: Current Pods: %v", nodeName, len(nodeInfo.Pods))
 
 	p.delegatingSharedLister.UpdateDelegate(clusterSnapshot)
 	defer p.delegatingSharedLister.ResetDelegate()

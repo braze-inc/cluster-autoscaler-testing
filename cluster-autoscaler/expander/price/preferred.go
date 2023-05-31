@@ -23,6 +23,7 @@ import (
 	apiv1 "k8s.io/api/core/v1"
 	"k8s.io/apimachinery/pkg/api/resource"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
+	"k8s.io/apimachinery/pkg/labels"
 	kube_util "k8s.io/autoscaler/cluster-autoscaler/utils/kubernetes"
 	"k8s.io/autoscaler/cluster-autoscaler/utils/units"
 )
@@ -40,8 +41,8 @@ func NewSimplePreferredNodeProvider(nodeLister kube_util.NodeLister) *SimplePref
 }
 
 // Node returns preferred node.
-func (spnp *SimplePreferredNodeProvider) Node() (*apiv1.Node, error) {
-	nodes, err := spnp.nodeLister.List()
+func (spnp *SimplePreferredNodeProvider) Node(_selector labels.Selector) (*apiv1.Node, error) {
+	nodes, err := spnp.nodeLister.List(_selector)
 	if err != nil {
 		return nil, err
 	}

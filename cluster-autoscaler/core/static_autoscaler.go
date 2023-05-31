@@ -223,7 +223,7 @@ func (a *StaticAutoscaler) cleanUpIfRequired() {
 	}
 
 	// CA can die at any time. Removing taints that might have been left from the previous run.
-	if allNodes, err := a.AllNodeLister().List(); err != nil {
+	if allNodes, err := a.AllNodeLister().List(a.NodeSelector); err != nil {
 		klog.Errorf("Failed to list ready nodes, not cleaning up taints: %v", err)
 	} else {
 		taints.CleanAllToBeDeleted(allNodes,
@@ -262,7 +262,7 @@ func (a *StaticAutoscaler) initializeClusterSnapshot(nodes []*apiv1.Node, schedu
 func (a *StaticAutoscaler) initializeRemainingPdbTracker() caerrors.AutoscalerError {
 	a.RemainingPdbTracker.Clear()
 
-	pdbs, err := a.PodDisruptionBudgetLister().List()
+	pdbs, err := a.PodDisruptionBudgetLister().List(a.LabelSelector)
 	if err != nil {
 		klog.Errorf("Failed to list pod disruption budgets: %v", err)
 		return caerrors.NewAutoscalerError(caerrors.ApiCallError, err.Error())
@@ -301,7 +301,7 @@ func (a *StaticAutoscaler) RunOnce(currentTime time.Time) caerrors.AutoscalerErr
 		return err
 	}
 
-	originalScheduledPods, unschedulablePods, err := scheduledAndUnschedulablePodLister.List()
+	originalScheduledPods, unschedulablePods, err := scheduledAndUnschedulablePodLister.List(a.LabelSelector)
 	if err != nil {
 		klog.Errorf("Failed to list scheduled and unschedulable pods: %v", err)
 		return caerrors.ToAutoscalerError(caerrors.ApiCallError, err)
@@ -350,7 +350,7 @@ func (a *StaticAutoscaler) RunOnce(currentTime time.Time) caerrors.AutoscalerErr
 		return typedErr.AddPrefix("failed to initialize RemainingPdbTracker: ")
 	}
 
-	nodeInfosForGroups, autoscalerError := a.processors.TemplateNodeInfoProvider.Process(autoscalingContext, readyNodes, daemonsets, a.taintConfig, currentTime)
+	nodeInfosForGroups, autoscalerError := a.processors.TemplateNodeInfoProvider.Process(autoscalingContext, readyNodes, daemonsets, a.taintConfig, currentTime, a.LabelSelector)
 	if autoscalerError != nil {
 		klog.Errorf("Failed to get node infos for groups: %v", autoscalerError)
 		return autoscalerError.AddPrefix("failed to build node infos for node groups: ")
@@ -546,9 +546,11 @@ func (a *StaticAutoscaler) RunOnce(currentTime time.Time) caerrors.AutoscalerErr
 	if len(unschedulablePodsToHelp) == 0 {
 		scaleUpStatus.Result = status.ScaleUpNotNeeded
 		klog.V(1).Info("No unschedulable pods")
+		klog.Info("+++ no unscheduleable pods")
 	} else if a.MaxNodesTotal > 0 && len(readyNodes) >= a.MaxNodesTotal {
 		scaleUpStatus.Result = status.ScaleUpNoOptionsAvailable
 		klog.V(1).Info("Max total nodes in cluster reached")
+		klog.Info("+++ max total nodes reached")
 	} else if allPodsAreNew(unschedulablePodsToHelp, currentTime) {
 		// The assumption here is that these pods have been created very recently and probably there
 		// is more pods to come. In theory we could check the newest pod time but then if pod were created
@@ -557,6 +559,7 @@ func (a *StaticAutoscaler) RunOnce(currentTime time.Time) caerrors.AutoscalerErr
 		a.processorCallbacks.DisableScaleDownForLoop()
 		scaleUpStatus.Result = status.ScaleUpInCooldown
 		klog.V(1).Info("Unschedulable pods are very new, waiting one iteration for more")
+		klog.Info("+++ pods are very new -- waiting for next run")
 	} else {
 		scaleUpStart := preScaleUp()
 		scaleUpStatus, typedErr = a.scaleUpOrchestrator.ScaleUp(unschedulablePodsToHelp, readyNodes, daemonsets, nodeInfosForGroups)
@@ -825,6 +828,7 @@ func (a *StaticAutoscaler) nodeGroupsById() map[string]cloudprovider.NodeGroup {
 // Don't consider pods newer than newPodScaleUpDelay or annotated podScaleUpDelay
 // seconds old as unschedulable.
 func (a *StaticAutoscaler) filterOutYoungPods(allUnschedulablePods []*apiv1.Pod, currentTime time.Time) []*apiv1.Pod {
+	klog.Infof("+++ number of allUnScheduleablePods: %v\n", len(allUnschedulablePods))
 	var oldUnschedulablePods []*apiv1.Pod
 	newPodScaleUpDelay := a.AutoscalingOptions.NewPodScaleUpDelay
 	for _, pod := range allUnschedulablePods {
@@ -867,12 +871,12 @@ func (a *StaticAutoscaler) ExitCleanUp() {
 }
 
 func (a *StaticAutoscaler) obtainNodeLists(cp cloudprovider.CloudProvider) ([]*apiv1.Node, []*apiv1.Node, caerrors.AutoscalerError) {
-	allNodes, err := a.AllNodeLister().List()
+	allNodes, err := a.AllNodeLister().List(a.NodeSelector)
 	if err != nil {
 		klog.Errorf("Failed to list all nodes: %v", err)
 		return nil, nil, caerrors.ToAutoscalerError(caerrors.ApiCallError, err)
 	}
-	readyNodes, err := a.ReadyNodeLister().List()
+	readyNodes, err := a.ReadyNodeLister().List(a.NodeSelector)
 	if err != nil {
 		klog.Errorf("Failed to list ready nodes: %v", err)
 		return nil, nil, caerrors.ToAutoscalerError(caerrors.ApiCallError, err)

@@ -21,6 +21,7 @@ import (
 	"k8s.io/autoscaler/cluster-autoscaler/context"
 	"k8s.io/autoscaler/cluster-autoscaler/processors/pods"
 	"k8s.io/autoscaler/cluster-autoscaler/simulator/predicatechecker"
+	"k8s.io/klog/v2"
 )
 
 type defaultPodListProcessor struct {
@@ -43,6 +44,7 @@ func NewDefaultPodListProcessor(predicateChecker predicatechecker.PredicateCheck
 func (p *defaultPodListProcessor) Process(ctx *context.AutoscalingContext, unschedulablePods []*apiv1.Pod) ([]*apiv1.Pod, error) {
 	var err error
 	for _, processor := range p.processors {
+		klog.Infof("+++ processor type: %T\n", processor)
 		unschedulablePods, err = processor.Process(ctx, unschedulablePods)
 		if err != nil {
 			return nil, err

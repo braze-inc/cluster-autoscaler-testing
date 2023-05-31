@@ -19,6 +19,7 @@ package random
 import (
 	"math/rand"
 
+	"k8s.io/apimachinery/pkg/labels"
 	"k8s.io/autoscaler/cluster-autoscaler/expander"
 	schedulerframework "k8s.io/kubernetes/pkg/scheduler/framework"
 )
@@ -37,8 +38,8 @@ func NewStrategy() expander.Strategy {
 }
 
 // BestOptions selects from the expansion options at random
-func (r *random) BestOptions(expansionOptions []expander.Option, nodeInfo map[string]*schedulerframework.NodeInfo) []expander.Option {
-	best := r.BestOption(expansionOptions, nodeInfo)
+func (r *random) BestOptions(expansionOptions []expander.Option, nodeInfo map[string]*schedulerframework.NodeInfo, nodeSelector labels.Selector) []expander.Option {
+	best := r.BestOption(expansionOptions, nodeInfo, nodeSelector)
 	if best == nil {
 		return nil
 	}
@@ -46,7 +47,7 @@ func (r *random) BestOptions(expansionOptions []expander.Option, nodeInfo map[st
 }
 
 // BestOption selects from the expansion options at random
-func (r *random) BestOption(expansionOptions []expander.Option, nodeInfo map[string]*schedulerframework.NodeInfo) *expander.Option {
+func (r *random) BestOption(expansionOptions []expander.Option, nodeInfo map[string]*schedulerframework.NodeInfo, nodeSelector labels.Selector) *expander.Option {
 	if len(expansionOptions) <= 0 {
 		return nil
 	}

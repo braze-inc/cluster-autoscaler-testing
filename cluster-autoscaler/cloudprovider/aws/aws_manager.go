@@ -526,6 +526,7 @@ type asgAutoDiscoveryConfig struct {
 // ParseASGAutoDiscoverySpecs returns any provided NodeGroupAutoDiscoverySpecs
 // parsed into configuration appropriate for ASG autodiscovery.
 func parseASGAutoDiscoverySpecs(o cloudprovider.NodeGroupDiscoveryOptions) ([]asgAutoDiscoveryConfig, error) {
+	klog.Infof("nodeGroupDiscoveryOpts in parseASGAutoDiscoverySpecs: %v\n", o)
 	cfgs := make([]asgAutoDiscoveryConfig, len(o.NodeGroupAutoDiscoverySpecs))
 	var err error
 	for i, spec := range o.NodeGroupAutoDiscoverySpecs {

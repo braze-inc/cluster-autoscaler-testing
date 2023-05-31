@@ -19,6 +19,7 @@ package pods
 import (
 	apiv1 "k8s.io/api/core/v1"
 	"k8s.io/autoscaler/cluster-autoscaler/context"
+	"k8s.io/klog/v2"
 )
 
 // PodListProcessor processes lists of unschedulable pods.
@@ -42,6 +43,7 @@ func NewDefaultPodListProcessor() PodListProcessor {
 func (p *NoOpPodListProcessor) Process(
 	context *context.AutoscalingContext,
 	unschedulablePods []*apiv1.Pod) ([]*apiv1.Pod, error) {
+	klog.Infof("+++ number of unschedulablePods in Process(): %v\n", unschedulablePods)
 	return unschedulablePods, nil
 }
 

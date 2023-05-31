@@ -23,6 +23,7 @@ import (
 	batchv1 "k8s.io/api/batch/v1"
 	apiv1 "k8s.io/api/core/v1"
 	policyv1 "k8s.io/api/policy/v1"
+	"k8s.io/apimachinery/pkg/labels"
 	v1appslister "k8s.io/client-go/listers/apps/v1"
 	v1batchlister "k8s.io/client-go/listers/batch/v1"
 	v1lister "k8s.io/client-go/listers/core/v1"
@@ -35,7 +36,7 @@ type TestPodLister struct {
 }
 
 // List returns all pods in test lister.
-func (lister TestPodLister) List() ([]*apiv1.Pod, error) {
+func (lister TestPodLister) List(s labels.Selector) ([]*apiv1.Pod, error) {
 	return lister.pods, nil
 }
 
@@ -51,7 +52,7 @@ type TestScheduledAndUnschedulablePodLister struct {
 }
 
 // List returns all scheduled and unschedulable pods in test lister.
-func (lister TestScheduledAndUnschedulablePodLister) List() (scheduledPods []*apiv1.Pod, unschedulablePods []*apiv1.Pod, err error) {
+func (lister TestScheduledAndUnschedulablePodLister) List(s labels.Selector) (scheduledPods []*apiv1.Pod, unschedulablePods []*apiv1.Pod, err error) {
 	return lister.scheduledPods, lister.unschedulablePods, nil
 }
 
@@ -69,7 +70,7 @@ type TestPodDisruptionBudgetLister struct {
 }
 
 // List returns all pdbs in test lister.
-func (lister TestPodDisruptionBudgetLister) List() ([]*policyv1.PodDisruptionBudget, error) {
+func (lister TestPodDisruptionBudgetLister) List(s labels.Selector) ([]*policyv1.PodDisruptionBudget, error) {
 	return lister.pdbs, nil
 }
 

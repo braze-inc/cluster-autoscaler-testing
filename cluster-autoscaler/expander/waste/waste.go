@@ -19,6 +19,7 @@ package waste
 import (
 	apiv1 "k8s.io/api/core/v1"
 	"k8s.io/apimachinery/pkg/api/resource"
+	"k8s.io/apimachinery/pkg/labels"
 	"k8s.io/autoscaler/cluster-autoscaler/expander"
 	klog "k8s.io/klog/v2"
 	schedulerframework "k8s.io/kubernetes/pkg/scheduler/framework"
@@ -33,7 +34,7 @@ func NewFilter() expander.Filter {
 }
 
 // BestOption Finds the option that wastes the least fraction of CPU and Memory
-func (l *leastwaste) BestOptions(expansionOptions []expander.Option, nodeInfo map[string]*schedulerframework.NodeInfo) []expander.Option {
+func (l *leastwaste) BestOptions(expansionOptions []expander.Option, nodeInfo map[string]*schedulerframework.NodeInfo, nodeSelector labels.Selector) []expander.Option {
 	var leastWastedScore float64
 	var leastWastedOptions []expander.Option
 
