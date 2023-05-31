@@ -17,6 +17,7 @@ limitations under the License.
 package kubernetes
 
 import (
+	podv1 "k8s.io/kubernetes/pkg/api/v1/pod"
 	"time"
 
 	appsv1 "k8s.io/api/apps/v1"
@@ -32,7 +33,6 @@ import (
 	v1policylister "k8s.io/client-go/listers/policy/v1"
 	"k8s.io/client-go/tools/cache"
 	klog "k8s.io/klog/v2"
-	podv1 "k8s.io/kubernetes/pkg/api/v1/pod"
 )
 
 // ListerRegistry is a registry providing various listers to list pods or nodes matching conditions
@@ -191,20 +191,36 @@ type scheduledAndUnschedulablePodLister struct {
 
 // List returns all scheduled and unschedulable pods.
 func (lister *scheduledAndUnschedulablePodLister) List(s labels.Selector) (scheduledPods []*apiv1.Pod, unschedulablePods []*apiv1.Pod, err error) {
-	allPods, err := lister.podLister.List(s)
+	allPods, err := lister.podLister.List(labels.Everything())
+	targetedPods, err := lister.podLister.List(s)
+
 	if err != nil {
 		return scheduledPods, unschedulablePods, err
 	}
+	// we need to list everything to calculate how many pods are on a node
 	for _, pod := range allPods {
 		if pod.Spec.NodeName != "" {
 			scheduledPods = append(scheduledPods, pod)
 			continue
 		}
+		//_, condition := podv1.GetPodCondition(&pod.Status, apiv1.PodScheduled)
+		//if condition != nil && condition.Status == apiv1.ConditionFalse && condition.Reason == apiv1.PodReasonUnschedulable {
+		//	unschedulablePods = append(unschedulablePods, pod)
+		//}
+	}
+
+	// Look at pods that we WANT to schedule only
+	for _, pod := range targetedPods {
+		//if pod.Spec.NodeName != "" {
+		//	scheduledPods = append(scheduledPods, pod)
+		//	continue
+		//}
 		_, condition := podv1.GetPodCondition(&pod.Status, apiv1.PodScheduled)
 		if condition != nil && condition.Status == apiv1.ConditionFalse && condition.Reason == apiv1.PodReasonUnschedulable {
 			unschedulablePods = append(unschedulablePods, pod)
 		}
 	}
+
 	klog.Info("pod counts - scheduled, unscheduleable pods: ", len(scheduledPods), len(unschedulablePods))
 	return scheduledPods, unschedulablePods, nil
 }
