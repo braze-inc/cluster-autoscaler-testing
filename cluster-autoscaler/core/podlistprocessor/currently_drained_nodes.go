@@ -34,7 +34,6 @@ func NewCurrentlyDrainedNodesPodListProcessor() *currentlyDrainedNodesPodListPro
 
 // Process adds recreatable pods from currently drained nodes
 func (p *currentlyDrainedNodesPodListProcessor) Process(context *context.AutoscalingContext, unschedulablePods []*apiv1.Pod) ([]*apiv1.Pod, error) {
-	//klog.Info("+++ in currentlyDrainedNodesPodListProcessor.Process()")
 	recreatablePods := pod_util.FilterRecreatablePods(currentlyDrainedPods(context))
 	return append(unschedulablePods, pod_util.ClearPodNodeNames(recreatablePods)...), nil
 }

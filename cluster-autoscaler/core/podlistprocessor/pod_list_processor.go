@@ -42,9 +42,6 @@ func NewDefaultPodListProcessor(predicateChecker predicatechecker.PredicateCheck
 
 // Process runs sub-processors sequentially
 func (p *defaultPodListProcessor) Process(ctx *context.AutoscalingContext, unschedulablePods []*apiv1.Pod) ([]*apiv1.Pod, error) {
-	//klog.Info("+++ in defaultPodListProcessor.Process()")
-	klog.Infof("+++ number of unschedulablePods in defaultPodListProcessor.Process(): %v\n", len(unschedulablePods))
-	//klog.Infof("+++ processors: %v\n", p.processors)
 	var err error
 	for _, processor := range p.processors {
 		klog.Infof("+++ processor type: %T\n", processor)

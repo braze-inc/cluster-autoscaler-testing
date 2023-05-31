@@ -47,6 +47,7 @@ func (p *filterOutDaemonSetPodListProcessor) Process(context *context.Autoscalin
 	}
 
 	klog.V(4).Infof("Filtered out %v daemon set pods, %v unschedulable pods left", len(unschedulablePods)-len(nonDaemonSetPods), len(nonDaemonSetPods))
+	klog.Infof("+++ filtered out %v daemon set pods, %v unschedulable pods left", len(unschedulablePods)-len(nonDaemonSetPods), len(nonDaemonSetPods))
 	return nonDaemonSetPods, nil
 }
 

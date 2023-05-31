@@ -18,6 +18,7 @@ package scheduling
 
 import (
 	"fmt"
+
 	"k8s.io/klog/v2"
 
 	"k8s.io/autoscaler/cluster-autoscaler/simulator/clustersnapshot"
