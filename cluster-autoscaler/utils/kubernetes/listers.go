@@ -17,8 +17,7 @@ limitations under the License.
 package kubernetes
 
 import (
-	"fmt"
-	"google.golang.org/appengine/log"
+	"k8s.io/klog/v2"
 	"sync"
 	"time"
 
@@ -203,10 +202,10 @@ func (lister *scheduledAndUnschedulablePodLister) List() (scheduledPods []*apiv1
 	var wg sync.WaitGroup
 	wg.Add(threads)
 
-	fmt.Println("+++ Spinning up %v workers", threads)
+	klog.Infof("+++ Spinning up %v workers", threads)
 	for i := 0; i < threads; i++ {
 		go func(workerId int) {
-			fmt.Println("Spinning up worker #%v", workerId)
+			klog.Infof("+++ Spinning up worker #%v", workerId)
 			defer wg.Done()
 			for pod := range podsChan {
 				if pod.Spec.NodeName != "" {
