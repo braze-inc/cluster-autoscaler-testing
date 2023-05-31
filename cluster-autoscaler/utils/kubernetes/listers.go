@@ -17,6 +17,9 @@ limitations under the License.
 package kubernetes
 
 import (
+	"fmt"
+	"google.golang.org/appengine/log"
+	"sync"
 	"time"
 
 	appsv1 "k8s.io/api/apps/v1"
@@ -194,17 +197,43 @@ func (lister *scheduledAndUnschedulablePodLister) List() (scheduledPods []*apiv1
 	if err != nil {
 		return scheduledPods, unschedulablePods, err
 	}
-	for _, pod := range allPods {
-		if pod.Spec.NodeName != "" {
-			scheduledPods = append(scheduledPods, pod)
-			continue
-		}
-		_, condition := podv1.GetPodCondition(&pod.Status, apiv1.PodScheduled)
-		if condition != nil && condition.Status == apiv1.ConditionFalse && condition.Reason == apiv1.PodReasonUnschedulable {
-			unschedulablePods = append(unschedulablePods, pod)
-		}
+
+	podsChan := make(chan *apiv1.Pod, 1000)
+	threads := 5
+	var wg sync.WaitGroup
+	wg.Add(threads)
+
+	fmt.Println("+++ Spinning up %v workers", threads)
+	for i := 0; i < threads; i++ {
+		go func(workerId int) {
+			fmt.Println("Spinning up worker #%v", workerId)
+			defer wg.Done()
+			for pod := range podsChan {
+				if pod.Spec.NodeName != "" {
+					scheduledPods = append(scheduledPods, pod)
+					continue
+				}
+				_, condition := podv1.GetPodCondition(&pod.Status, apiv1.PodScheduled)
+				if condition != nil && condition.Status == apiv1.ConditionFalse && condition.Reason == apiv1.PodReasonUnschedulable {
+					unschedulablePods = append(unschedulablePods, pod)
+				}
+			}
+		}(i)
 	}
+
+	// Push all pods into channel by looping over slice
+	for _, pod := range allPods {
+		podsChan <- pod
+	}
+	close(podsChan)
+
+	wg.Wait()
+
 	return scheduledPods, unschedulablePods, nil
+}
+
+func processPods(podChan chan *apiv1.Pod) {
+
 }
 
 // NewScheduledAndUnschedulablePodLister builds ScheduledAndUnschedulablePodLister
