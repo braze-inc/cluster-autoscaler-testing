@@ -80,6 +80,7 @@ func createAWSManagerInternal(
 		awsService = &awsWrapper{autoscaling.New(sess), ec2.New(sess), eks.New(sess)}
 	}
 
+	//klog.Infof("+++ discoveryOpts: %v\n", discoveryOpts)
 	specs, err := parseASGAutoDiscoverySpecs(discoveryOpts)
 	if err != nil {
 		return nil, err
@@ -526,6 +527,7 @@ type asgAutoDiscoveryConfig struct {
 // ParseASGAutoDiscoverySpecs returns any provided NodeGroupAutoDiscoverySpecs
 // parsed into configuration appropriate for ASG autodiscovery.
 func parseASGAutoDiscoverySpecs(o cloudprovider.NodeGroupDiscoveryOptions) ([]asgAutoDiscoveryConfig, error) {
+	klog.Infof("nodeGroupDiscoveryOpts in parseASGAutoDiscoverySpecs: %v\n", o)
 	cfgs := make([]asgAutoDiscoveryConfig, len(o.NodeGroupAutoDiscoverySpecs))
 	var err error
 	for i, spec := range o.NodeGroupAutoDiscoverySpecs {
@@ -534,6 +536,7 @@ func parseASGAutoDiscoverySpecs(o cloudprovider.NodeGroupDiscoveryOptions) ([]as
 			return nil, err
 		}
 	}
+	//klog.Infof("+++ cfgs in parseAsgAutoDiscovery: %v\n", cfgs)
 	return cfgs, nil
 }
 
@@ -573,5 +576,6 @@ func parseASGAutoDiscoverySpec(spec string) (asgAutoDiscoveryConfig, error) {
 		}
 		cfg.Tags[lp[0]] = ""
 	}
+	//klog.Infof("+++ nodeGroupDiscoveryOpts in parseASGAutoDiscoverySpec: %v\n", cfg)
 	return cfg, nil
 }

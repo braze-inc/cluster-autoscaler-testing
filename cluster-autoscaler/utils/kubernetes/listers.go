@@ -191,8 +191,6 @@ type scheduledAndUnschedulablePodLister struct {
 
 // List returns all scheduled and unschedulable pods.
 func (lister *scheduledAndUnschedulablePodLister) List(s labels.Selector) (scheduledPods []*apiv1.Pod, unschedulablePods []*apiv1.Pod, err error) {
-	klog.Infof("++++ in scheduledAndUnSchedulablePodLister.List() - selector: %v\n", s)
-	//allPods, err := lister.podLister.List(labels.Everything())
 	allPods, err := lister.podLister.List(s)
 	if err != nil {
 		return scheduledPods, unschedulablePods, err
@@ -263,8 +261,6 @@ func NewNodeLister(kubeClient client.Interface, filter func(*apiv1.Node) bool, s
 func (l *nodeListerImpl) List(selector labels.Selector) ([]*apiv1.Node, error) {
 	var nodes []*apiv1.Node
 	var err error
-
-	klog.Infof("+++ using %v as selector for listing nodes", selector.String())
 
 	//nodes, err = l.nodeLister.List(labels.Everything())
 	nodes, err = l.nodeLister.List(selector)

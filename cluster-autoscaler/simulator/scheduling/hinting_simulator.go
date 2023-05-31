@@ -18,6 +18,7 @@ package scheduling
 
 import (
 	"fmt"
+	"k8s.io/klog/v2"
 
 	"k8s.io/autoscaler/cluster-autoscaler/simulator/clustersnapshot"
 	"k8s.io/autoscaler/cluster-autoscaler/simulator/predicatechecker"
@@ -76,7 +77,9 @@ func (s *HintingSimulator) TrySchedulePods(clusterSnapshot clustersnapshot.Clust
 
 		if nodeName != "" {
 			klogx.V(4).UpTo(loggingQuota).Infof("Pod %s/%s can be moved to %s", pod.Namespace, pod.Name, nodeName)
+			klog.Infof("+++ Pod %s/%s can be moved to %s", pod.Namespace, pod.Name, nodeName)
 			if err := clusterSnapshot.AddPod(pod, nodeName); err != nil {
+				klog.Info("+++ ERROR IN AddPod()")
 				return nil, 0, fmt.Errorf("simulating scheduling of %s/%s to %s return error; %v", pod.Namespace, pod.Name, nodeName, err)
 			}
 			statuses = append(statuses, Status{Pod: pod, NodeName: nodeName})
@@ -116,6 +119,7 @@ func (s *HintingSimulator) findNode(similarPods *SimilarPodsScheduling, clusterS
 	newNodeName, err := s.predicateChecker.FitsAnyNodeMatching(clusterSnapshot, pod, isNodeAcceptable)
 	if err != nil {
 		klogx.V(4).UpTo(loggingQuota).Infof("failed to find place for %s/%s: %v", pod.Namespace, pod.Name, err)
+		klog.Infof("+++ failed to find place for %s/%s: %v", pod.Namespace, pod.Name, err)
 		similarPods.SetUnschedulable(pod)
 		return "", nil
 	}

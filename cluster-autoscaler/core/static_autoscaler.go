@@ -307,6 +307,8 @@ func (a *StaticAutoscaler) RunOnce(currentTime time.Time) caerrors.AutoscalerErr
 		return caerrors.ToAutoscalerError(caerrors.ApiCallError, err)
 	}
 
+	klog.Infof("+++ originalSchedulePods, unschedulablePods: %v, %v\n", len(originalScheduledPods), len(unschedulablePods))
+
 	// Update cluster resource usage metrics
 	coresTotal, memoryTotal := calculateCoresMemoryTotal(allNodes, currentTime)
 	metrics.UpdateClusterCPUCurrentCores(coresTotal)
@@ -317,6 +319,7 @@ func (a *StaticAutoscaler) RunOnce(currentTime time.Time) caerrors.AutoscalerErr
 		klog.Errorf("Failed to get daemonset list: %v", err)
 		return caerrors.ToAutoscalerError(caerrors.ApiCallError, err)
 	}
+	klog.Infof("+++ daemonsets: %v\n", len(daemonsets))
 	// Snapshot scale-down actuation status before cache refresh.
 	scaleDownActuationStatus := a.scaleDownActuator.CheckStatus()
 	// Call CloudProvider.Refresh before any other calls to cloud provider.
@@ -450,11 +453,14 @@ func (a *StaticAutoscaler) RunOnce(currentTime time.Time) caerrors.AutoscalerErr
 	metrics.UpdateUnschedulablePodsCount(len(unschedulablePods))
 
 	unschedulablePods = tpu.ClearTPURequests(unschedulablePods)
+	klog.Infof("+++ number of unscheduleablePods after tpu.ClearTPURequests: %v\n", len(unschedulablePods))
 
 	// todo: move split and append below to separate PodListProcessor
 	// Some unschedulable pods can be waiting for lower priority pods preemption so they have nominated node to run.
 	// Such pods don't require scale up but should be considered during scale down.
+	klog.Infof("+++ number of unschedulablePods before FilterOutExpenable: %v\n", len(unschedulablePods))
 	unschedulablePods, unschedulableWaitingForLowerPriorityPreemption := core_utils.FilterOutExpendableAndSplit(unschedulablePods, allNodes, a.ExpendablePodsPriorityCutoff)
+	klog.Infof("+++ number of unschedulablePods after FilterOutExpenable: %v\n", len(unschedulablePods))
 
 	// modify the snapshot simulating scheduling of pods waiting for preemption.
 	// this is not strictly correct as we are not simulating preemption itself but it matches
@@ -511,7 +517,9 @@ func (a *StaticAutoscaler) RunOnce(currentTime time.Time) caerrors.AutoscalerErr
 		a.AutoscalingContext.DebuggingSnapshotter.SetClusterNodes(l)
 	}
 
+	//klog.Info("+++ calling podList.Processor()")
 	unschedulablePodsToHelp, _ := a.processors.PodListProcessor.Process(a.AutoscalingContext, unschedulablePods)
+	klog.Infof("+++ unschedulablePodsToHelp in static_autoscaler:515: %v\n", unschedulablePodsToHelp)
 
 	// finally, filter out pods that are too "young" to safely be considered for a scale-up (delay is configurable)
 	unschedulablePodsToHelp = a.filterOutYoungPods(unschedulablePodsToHelp, currentTime)
@@ -825,6 +833,9 @@ func (a *StaticAutoscaler) nodeGroupsById() map[string]cloudprovider.NodeGroup {
 // Don't consider pods newer than newPodScaleUpDelay or annotated podScaleUpDelay
 // seconds old as unschedulable.
 func (a *StaticAutoscaler) filterOutYoungPods(allUnschedulablePods []*apiv1.Pod, currentTime time.Time) []*apiv1.Pod {
+	//klog.Infof("+++ in filterOutYoungPods()")
+	klog.Infof("+++ number of allUnScheduleablePods: %v\n", len(allUnschedulablePods))
+	//klog.Infof("+++ allUnScheduleablePods: %v\n", allUnschedulablePods)
 	var oldUnschedulablePods []*apiv1.Pod
 	newPodScaleUpDelay := a.AutoscalingOptions.NewPodScaleUpDelay
 	for _, pod := range allUnschedulablePods {
@@ -850,6 +861,8 @@ func (a *StaticAutoscaler) filterOutYoungPods(allUnschedulablePods []*apiv1.Pod,
 			klog.V(3).Infof("Pod %s is %.3f seconds old, too new to consider unschedulable", pod.Name, podAge.Seconds())
 		}
 	}
+	klog.Infof("+++ number of oldUnschedulablePods: %v\n", len(oldUnschedulablePods))
+	//klog.Infof("+++ oldUnschedulablePods: %v\n", oldUnschedulablePods)
 	return oldUnschedulablePods
 }
 
