@@ -302,6 +302,7 @@ func (a *StaticAutoscaler) RunOnce(currentTime time.Time) caerrors.AutoscalerErr
 	}
 
 	originalScheduledPods, unschedulablePods, err := scheduledAndUnschedulablePodLister.List()
+	klog.Infof("+++ originalScheduledPods: %v, unschedulablePods: %v", len(originalScheduledPods), len(unschedulablePods))
 	if err != nil {
 		klog.Errorf("Failed to list scheduled and unschedulable pods: %v", err)
 		return caerrors.ToAutoscalerError(caerrors.ApiCallError, err)
@@ -340,6 +341,9 @@ func (a *StaticAutoscaler) RunOnce(currentTime time.Time) caerrors.AutoscalerErr
 	} else {
 		metrics.UpdateMaxNodesCount(maxNodesCount)
 	}
+
+	//for _, pod := range originalScheduledPods{}
+
 	nonExpendableScheduledPods := core_utils.FilterOutExpendablePods(originalScheduledPods, a.ExpendablePodsPriorityCutoff)
 	// Initialize cluster state to ClusterSnapshot
 	if typedErr := a.initializeClusterSnapshot(allNodes, nonExpendableScheduledPods); typedErr != nil {

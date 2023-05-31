@@ -54,7 +54,14 @@ func FilterOutExpendableAndSplit(unschedulableCandidates []*apiv1.Pod, nodes []*
 // FilterOutExpendablePods filters out expendable pods.
 func FilterOutExpendablePods(pods []*apiv1.Pod, expendablePodsPriorityCutoff int) []*apiv1.Pod {
 	var result []*apiv1.Pod
+
+	if pods == nil {
+		klog.Infof("+++ Entire pods slice was nil in FilterOutExpendablePods()")
+	}
 	for _, pod := range pods {
+		if pod == nil {
+			klog.Infof("+++ Pod was nil in FilterOutExpendablePods()")
+		}
 		if !IsExpendablePod(pod, expendablePodsPriorityCutoff) {
 			result = append(result, pod)
 		}

@@ -208,6 +208,9 @@ func (lister *scheduledAndUnschedulablePodLister) List() (scheduledPods []*apiv1
 			klog.Infof("+++ Spinning up worker #%v", workerId)
 			defer wg.Done()
 			for pod := range podsChan {
+				if pod == nil {
+					klog.Infof("+++ Pod was nil in List()")
+				}
 				if pod.Spec.NodeName != "" {
 					scheduledPods = append(scheduledPods, pod)
 					continue
@@ -225,14 +228,10 @@ func (lister *scheduledAndUnschedulablePodLister) List() (scheduledPods []*apiv1
 		podsChan <- pod
 	}
 	close(podsChan)
-
 	wg.Wait()
 
+	klog.Infof("+++ scheduled pod count: %v unscheduled pod count: %v", len(scheduledPods), len(unschedulablePods))
 	return scheduledPods, unschedulablePods, nil
-}
-
-func processPods(podChan chan *apiv1.Pod) {
-
 }
 
 // NewScheduledAndUnschedulablePodLister builds ScheduledAndUnschedulablePodLister
