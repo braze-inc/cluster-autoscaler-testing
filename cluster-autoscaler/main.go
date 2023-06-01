@@ -466,16 +466,16 @@ func run(healthCheck *metrics.HealthCheck, debuggingSnapshotter debuggingsnapsho
 
 func main() {
 	// Instrument Datadog APM
-    tracer.Start()
-    defer tracer.Stop()
+	tracer.Start()
+	defer tracer.Stop()
 
-    // Create a traced mux router
-    mux := httptrace.NewServeMux()
-    // Continue using the router as you normally would.
-    mux.HandleFunc("/", func(w http.ResponseWriter, r *http.Request) {
-        w.Write([]byte("Hello World!"))
-    })
-    http.ListenAndServe(":8080", mux)
+	// Create a traced mux router
+	mux := httptrace.NewServeMux()
+	// Continue using the router as you normally would.
+	mux.HandleFunc("/", func(w http.ResponseWriter, r *http.Request) {
+		w.Write([]byte("Hello World!"))
+	})
+	http.ListenAndServe(":8080", mux)
 
 	klog.InitFlags(nil)
 
