@@ -42,7 +42,6 @@ func getDefaultPlugins() *v1beta2.Plugins {
 				{Name: names.PodTopologySpread},
 				{Name: names.InterPodAffinity},
 				{Name: names.VolumeBinding},
-				{Name: names.VolumeZone},
 				{Name: names.NodeAffinity},
 			},
 		},
@@ -76,8 +75,6 @@ func getDefaultPlugins() *v1beta2.Plugins {
 				{Name: names.PodTopologySpread},
 				{Name: names.TaintToleration},
 				{Name: names.NodeAffinity},
-				{Name: names.NodeResourcesFit},
-				{Name: names.NodeResourcesBalancedAllocation},
 			},
 		},
 		Score: v1beta2.PluginSet{

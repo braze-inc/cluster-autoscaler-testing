@@ -22,17 +22,14 @@ import (
 	"fmt"
 	"io"
 	"net"
-	"time"
 
 	"google.golang.org/grpc"
 	"google.golang.org/grpc/credentials/insecure"
 	"k8s.io/apimachinery/pkg/types"
 	"k8s.io/klog/v2"
 
-	drapbv1 "k8s.io/kubelet/pkg/apis/dra/v1alpha2"
+	drapbv1 "k8s.io/kubelet/pkg/apis/dra/v1alpha1"
 )
-
-const PluginClientTimeout = 10 * time.Second
 
 type Client interface {
 	NodePrepareResource(
@@ -48,7 +45,7 @@ type Client interface {
 		namespace string,
 		claimUID types.UID,
 		claimName string,
-		resourceHandle string,
+		cdiDevice []string,
 	) (*drapbv1.NodeUnprepareResourceResponse, error)
 }
 
@@ -113,9 +110,9 @@ func (r *draPluginClient) NodePrepareResource(
 	klog.V(4).InfoS(
 		log("calling NodePrepareResource rpc"),
 		"namespace", namespace,
-		"claimUID", claimUID,
-		"claimName", claimName,
-		"resourceHandle", resourceHandle)
+		"claim UID", claimUID,
+		"claim name", claimName,
+		"resource handle", resourceHandle)
 
 	if r.nodeV1ClientCreator == nil {
 		return nil, errors.New("failed to call NodePrepareResource. nodeV1ClientCreator is nil")
@@ -134,9 +131,6 @@ func (r *draPluginClient) NodePrepareResource(
 		ResourceHandle: resourceHandle,
 	}
 
-	ctx, cancel := context.WithTimeout(ctx, PluginClientTimeout)
-	defer cancel()
-
 	return nodeClient.NodePrepareResource(ctx, req)
 }
 
@@ -145,14 +139,14 @@ func (r *draPluginClient) NodeUnprepareResource(
 	namespace string,
 	claimUID types.UID,
 	claimName string,
-	resourceHandle string,
+	cdiDevices []string,
 ) (*drapbv1.NodeUnprepareResourceResponse, error) {
 	klog.V(4).InfoS(
 		log("calling NodeUnprepareResource rpc"),
 		"namespace", namespace,
-		"claimUID", claimUID,
-		"claimname", claimName,
-		"resourceHandle", resourceHandle)
+		"claim UID", claimUID,
+		"claim name", claimName,
+		"cdi devices", cdiDevices)
 
 	if r.nodeV1ClientCreator == nil {
 		return nil, errors.New("nodeV1ClientCreate is nil")
@@ -165,14 +159,11 @@ func (r *draPluginClient) NodeUnprepareResource(
 	defer closer.Close()
 
 	req := &drapbv1.NodeUnprepareResourceRequest{
-		Namespace:      namespace,
-		ClaimUid:       string(claimUID),
-		ClaimName:      claimName,
-		ResourceHandle: resourceHandle,
+		Namespace:  namespace,
+		ClaimUid:   string(claimUID),
+		ClaimName:  claimName,
+		CdiDevices: cdiDevices,
 	}
-
-	ctx, cancel := context.WithTimeout(ctx, PluginClientTimeout)
-	defer cancel()
 
 	return nodeClient.NodeUnprepareResource(ctx, req)
 }

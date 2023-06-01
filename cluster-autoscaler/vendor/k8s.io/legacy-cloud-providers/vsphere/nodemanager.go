@@ -231,7 +231,6 @@ func (nm *NodeManager) DiscoverNode(node *v1.Node) error {
 					cancel()
 					break
 				}
-				cancel()
 			}
 			wg.Done()
 		}()

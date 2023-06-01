@@ -378,15 +378,15 @@ func addAllEventHandlers(
 			informerFactory.Core().V1().PersistentVolumeClaims().Informer().AddEventHandler(
 				buildEvtResHandler(at, framework.PersistentVolumeClaim, "Pvc"),
 			)
-		case framework.PodSchedulingContext:
+		case framework.PodScheduling:
 			if utilfeature.DefaultFeatureGate.Enabled(features.DynamicResourceAllocation) {
-				_, _ = informerFactory.Resource().V1alpha2().PodSchedulingContexts().Informer().AddEventHandler(
-					buildEvtResHandler(at, framework.PodSchedulingContext, "PodSchedulingContext"),
+				_, _ = informerFactory.Resource().V1alpha1().PodSchedulings().Informer().AddEventHandler(
+					buildEvtResHandler(at, framework.PodScheduling, "PodScheduling"),
 				)
 			}
 		case framework.ResourceClaim:
 			if utilfeature.DefaultFeatureGate.Enabled(features.DynamicResourceAllocation) {
-				_, _ = informerFactory.Resource().V1alpha2().ResourceClaims().Informer().AddEventHandler(
+				_, _ = informerFactory.Resource().V1alpha1().ResourceClaims().Informer().AddEventHandler(
 					buildEvtResHandler(at, framework.ResourceClaim, "ResourceClaim"),
 				)
 			}

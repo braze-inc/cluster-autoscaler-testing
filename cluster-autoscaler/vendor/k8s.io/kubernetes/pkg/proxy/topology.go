@@ -148,9 +148,11 @@ func canUseTopology(endpoints []Endpoint, svcInfo ServicePort, nodeLabels map[st
 	if !utilfeature.DefaultFeatureGate.Enabled(features.TopologyAwareHints) {
 		return false
 	}
-	// Any non-empty and non-disabled values for the hints annotation are acceptable.
 	hintsAnnotation := svcInfo.HintsAnnotation()
-	if hintsAnnotation == "" || hintsAnnotation == "disabled" || hintsAnnotation == "Disabled" {
+	if hintsAnnotation != "Auto" && hintsAnnotation != "auto" {
+		if hintsAnnotation != "" && hintsAnnotation != "Disabled" && hintsAnnotation != "disabled" {
+			klog.InfoS("Skipping topology aware endpoint filtering since Service has unexpected value", "annotationTopologyAwareHints", v1.AnnotationTopologyAwareHints, "hints", hintsAnnotation)
+		}
 		return false
 	}
 

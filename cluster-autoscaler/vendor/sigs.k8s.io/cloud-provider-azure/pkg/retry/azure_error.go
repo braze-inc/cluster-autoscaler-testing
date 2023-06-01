@@ -262,35 +262,22 @@ func getRetryAfter(resp *http.Response) time.Duration {
 	return dur
 }
 
-// IsInHTTPStatusCodeSet return true when status code falls in the status code list
-// It is used with doBackoffRetry to retry on some HTTPStatusCodes.
-func IsInHTTPStatusCodeSet(rerr *Error, httpStatusCodes []int) bool {
+// GetErrorWithRetriableHTTPStatusCodes gets an error with RetriableHTTPStatusCodes.
+// It is used to retry on some HTTPStatusCodes.
+func GetErrorWithRetriableHTTPStatusCodes(resp *http.Response, err error, retriableHTTPStatusCodes []int) *Error {
+	rerr := GetError(resp, err)
 	if rerr == nil {
-		return false
+		return nil
 	}
-	for _, code := range httpStatusCodes {
+
+	for _, code := range retriableHTTPStatusCodes {
 		if rerr.HTTPStatusCode == code {
-			return true
+			rerr.Retriable = true
+			break
 		}
 	}
 
-	return false
-}
-
-// isInErrorsSet return true when error message falls in the error message set
-// It is used with doBackoffRetry to retry on some errors.
-func isInErrorsSet(rerr *Error, errorMsgs []string) bool {
-
-	if rerr == nil {
-		return false
-	}
-
-	for _, err := range errorMsgs {
-		if strings.Contains(rerr.RawError.Error(), err) {
-			return true
-		}
-	}
-	return false
+	return rerr
 }
 
 // GetStatusNotFoundAndForbiddenIgnoredError gets an error with StatusNotFound and StatusForbidden ignored.
@@ -352,7 +339,7 @@ func GetVMSSMetadataByRawError(err *Error) (string, string, error) {
 	reg := regexp.MustCompile(`.*/subscriptions/(?:.*)/resourceGroups/(.*)/providers/Microsoft.Compute/virtualMachineScaleSets/(.+).`)
 	matches := reg.FindStringSubmatch(err.ServiceErrorMessage())
 	if len(matches) != 3 {
-		return "", "", fmt.Errorf("GetVMSSMetadataByRawError: couldn't find a VMSS resource Id from error message %w", err.RawError)
+		return "", "", fmt.Errorf("GetVMSSMetadataByRawError: couldn't find a VMSS resource Id from error message %s", err.RawError)
 	}
 
 	return matches[1], matches[2], nil

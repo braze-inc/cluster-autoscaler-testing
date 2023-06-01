@@ -47,8 +47,8 @@ func (az *Cloud) reconcilePrivateLinkService(
 
 	if createPLS {
 		// Firstly, make sure it's internal service
-		if !requiresInternalLoadBalancer(service) && !consts.IsK8sServiceDisableLoadBalancerFloatingIP(service) {
-			return fmt.Errorf("reconcilePrivateLinkService for service(%s): service requiring private link service must be internal or disable floating ip", serviceName)
+		if !requiresInternalLoadBalancer(service) {
+			return fmt.Errorf("reconcilePrivateLinkService for service(%s): service requiring private link service must be internal", serviceName)
 		}
 
 		// Secondly, check if there is a private link service already created
@@ -518,10 +518,8 @@ func getPLSSubnetName(service *v1.Service) *string {
 		return &l
 	}
 
-	if requiresInternalLoadBalancer(service) {
-		if l, found := service.Annotations[consts.ServiceAnnotationLoadBalancerInternalSubnet]; found && strings.TrimSpace(l) != "" {
-			return &l
-		}
+	if l, found := service.Annotations[consts.ServiceAnnotationLoadBalancerInternalSubnet]; found && strings.TrimSpace(l) != "" {
+		return &l
 	}
 
 	return nil

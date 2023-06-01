@@ -33,6 +33,7 @@ import (
 	"k8s.io/kubernetes/pkg/kubelet/apis/podresources"
 	"k8s.io/kubernetes/pkg/kubelet/cm/cpuset"
 	"k8s.io/kubernetes/pkg/kubelet/cm/devicemanager"
+	"k8s.io/kubernetes/pkg/kubelet/cm/dra"
 	"k8s.io/kubernetes/pkg/kubelet/config"
 	kubecontainer "k8s.io/kubernetes/pkg/kubelet/container"
 	evictionapi "k8s.io/kubernetes/pkg/kubelet/eviction/api"
@@ -117,21 +118,20 @@ type ContainerManager interface {
 	// GetNodeAllocatableAbsolute returns the absolute value of Node Allocatable which is primarily useful for enforcement.
 	GetNodeAllocatableAbsolute() v1.ResourceList
 
-	// PrepareDynamicResource prepares dynamic pod resources
-	PrepareDynamicResources(*v1.Pod) error
+	// PrepareResource prepares pod resources
+	PrepareResources(pod *v1.Pod, container *v1.Container) (*dra.ContainerInfo, error)
 
-	// UnrepareDynamicResources unprepares dynamic pod resources
-	UnprepareDynamicResources(*v1.Pod) error
+	// UnrepareResources unprepares pod resources
+	UnprepareResources(*v1.Pod) error
 
 	// PodMightNeedToUnprepareResources returns true if the pod with the given UID
 	// might need to unprepare resources.
 	PodMightNeedToUnprepareResources(UID types.UID) bool
 
-	// Implements the PodResources Provider API
+	// Implements the podresources Provider API for CPUs, Memory and Devices
 	podresources.CPUsProvider
 	podresources.DevicesProvider
 	podresources.MemoryProvider
-	podresources.DynamicResourcesProvider
 }
 
 type NodeConfig struct {
@@ -149,14 +149,14 @@ type NodeConfig struct {
 	QOSReserved                              map[v1.ResourceName]int64
 	CPUManagerPolicy                         string
 	CPUManagerPolicyOptions                  map[string]string
-	TopologyManagerScope                     string
+	ExperimentalTopologyManagerScope         string
 	CPUManagerReconcilePeriod                time.Duration
 	ExperimentalMemoryManagerPolicy          string
 	ExperimentalMemoryManagerReservedMemory  []kubeletconfig.MemoryReservation
-	PodPidsLimit                             int64
+	ExperimentalPodPidsLimit                 int64
 	EnforceCPULimits                         bool
 	CPUCFSQuotaPeriod                        time.Duration
-	TopologyManagerPolicy                    string
+	ExperimentalTopologyManagerPolicy        string
 	ExperimentalTopologyManagerPolicyOptions map[string]string
 }
 
@@ -199,7 +199,7 @@ func ParseQOSReserved(m map[string]string) (*map[v1.ResourceName]int64, error) {
 		case v1.ResourceMemory:
 			q, err := parsePercentage(v)
 			if err != nil {
-				return nil, fmt.Errorf("failed to parse percentage %q for %q resource: %w", v, k, err)
+				return nil, err
 			}
 			reservations[v1.ResourceName(k)] = q
 		default:

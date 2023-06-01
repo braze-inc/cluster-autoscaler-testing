@@ -359,13 +359,12 @@ type mountedPod struct {
 }
 
 func (asw *actualStateOfWorld) MarkVolumeAsAttached(
-	logger klog.Logger,
 	volumeName v1.UniqueVolumeName, volumeSpec *volume.Spec, _ types.NodeName, devicePath string) error {
 	return asw.addVolume(volumeName, volumeSpec, devicePath)
 }
 
 func (asw *actualStateOfWorld) MarkVolumeAsUncertain(
-	logger klog.Logger, volumeName v1.UniqueVolumeName, volumeSpec *volume.Spec, _ types.NodeName) error {
+	volumeName v1.UniqueVolumeName, volumeSpec *volume.Spec, _ types.NodeName) error {
 	return nil
 }
 
@@ -474,7 +473,7 @@ func (asw *actualStateOfWorld) MarkVolumeAsMounted(markVolumeOpts operationexecu
 	return asw.AddPodToVolume(markVolumeOpts)
 }
 
-func (asw *actualStateOfWorld) AddVolumeToReportAsAttached(logger klog.Logger, volumeName v1.UniqueVolumeName, nodeName types.NodeName) {
+func (asw *actualStateOfWorld) AddVolumeToReportAsAttached(volumeName v1.UniqueVolumeName, nodeName types.NodeName) {
 	// no operation for kubelet side
 }
 
@@ -771,7 +770,7 @@ func (asw *actualStateOfWorld) SetDeviceMountState(
 	return nil
 }
 
-func (asw *actualStateOfWorld) InitializeClaimSize(logger klog.Logger, volumeName v1.UniqueVolumeName, claimSize *resource.Quantity) {
+func (asw *actualStateOfWorld) InitializeClaimSize(volumeName v1.UniqueVolumeName, claimSize *resource.Quantity) {
 	asw.Lock()
 	defer asw.Unlock()
 

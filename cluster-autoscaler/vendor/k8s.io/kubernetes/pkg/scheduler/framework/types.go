@@ -29,12 +29,7 @@ import (
 	"k8s.io/apimachinery/pkg/labels"
 	utilerrors "k8s.io/apimachinery/pkg/util/errors"
 	"k8s.io/apimachinery/pkg/util/sets"
-	utilfeature "k8s.io/apiserver/pkg/util/feature"
 	"k8s.io/klog/v2"
-
-	podutil "k8s.io/kubernetes/pkg/api/v1/pod"
-	resourcehelper "k8s.io/kubernetes/pkg/api/v1/resource"
-	"k8s.io/kubernetes/pkg/features"
 	schedutil "k8s.io/kubernetes/pkg/scheduler/util"
 )
 
@@ -69,7 +64,7 @@ const (
 	Node                  GVK = "Node"
 	PersistentVolume      GVK = "PersistentVolume"
 	PersistentVolumeClaim GVK = "PersistentVolumeClaim"
-	PodSchedulingContext  GVK = "PodSchedulingContext"
+	PodScheduling         GVK = "PodScheduling"
 	ResourceClaim         GVK = "ResourceClaim"
 	StorageClass          GVK = "storage.k8s.io/StorageClass"
 	CSINode               GVK = "storage.k8s.io/CSINode"
@@ -485,7 +480,7 @@ func (r *Resource) Clone() *Resource {
 		EphemeralStorage: r.EphemeralStorage,
 	}
 	if r.ScalarResources != nil {
-		res.ScalarResources = make(map[v1.ResourceName]int64, len(r.ScalarResources))
+		res.ScalarResources = make(map[v1.ResourceName]int64)
 		for k, v := range r.ScalarResources {
 			res.ScalarResources[k] = v
 		}
@@ -727,30 +722,27 @@ func max(a, b int64) int64 {
 	return b
 }
 
-func calculateResource(pod *v1.Pod) (Resource, int64, int64) {
-	var non0InitCPU, non0InitMem int64
-	var non0CPU, non0Mem int64
-	requests := resourcehelper.PodRequests(pod, resourcehelper.PodResourcesOptions{
-		InPlacePodVerticalScalingEnabled: utilfeature.DefaultFeatureGate.Enabled(features.InPlacePodVerticalScaling),
-		ContainerFn: func(requests v1.ResourceList, containerType podutil.ContainerType) {
-			non0CPUReq, non0MemReq := schedutil.GetNonzeroRequests(&requests)
-			switch containerType {
-			case podutil.Containers:
-				non0CPU += non0CPUReq
-				non0Mem += non0MemReq
-			case podutil.InitContainers:
-				non0InitCPU = max(non0InitCPU, non0CPUReq)
-				non0InitMem = max(non0InitMem, non0MemReq)
-			}
-		},
-	})
+// resourceRequest = max(sum(podSpec.Containers), podSpec.InitContainers) + overHead
+func calculateResource(pod *v1.Pod) (res Resource, non0CPU int64, non0Mem int64) {
+	resPtr := &res
+	for _, c := range pod.Spec.Containers {
+		resPtr.Add(c.Resources.Requests)
+		non0CPUReq, non0MemReq := schedutil.GetNonzeroRequests(&c.Resources.Requests)
+		non0CPU += non0CPUReq
+		non0Mem += non0MemReq
+		// No non-zero resources for GPUs or opaque resources.
+	}
 
-	non0CPU = max(non0CPU, non0InitCPU)
-	non0Mem = max(non0Mem, non0InitMem)
+	for _, ic := range pod.Spec.InitContainers {
+		resPtr.SetMaxResource(ic.Resources.Requests)
+		non0CPUReq, non0MemReq := schedutil.GetNonzeroRequests(&ic.Resources.Requests)
+		non0CPU = max(non0CPU, non0CPUReq)
+		non0Mem = max(non0Mem, non0MemReq)
+	}
 
-	// If Overhead is being utilized, add to the non-zero cpu/memory tracking for the pod. It has already been added
-	// into ScalarResources since it is part of requests
+	// If Overhead is being utilized, add to the total requests for the pod
 	if pod.Spec.Overhead != nil {
+		resPtr.Add(pod.Spec.Overhead)
 		if _, found := pod.Spec.Overhead[v1.ResourceCPU]; found {
 			non0CPU += pod.Spec.Overhead.Cpu().MilliValue()
 		}
@@ -759,9 +751,8 @@ func calculateResource(pod *v1.Pod) (Resource, int64, int64) {
 			non0Mem += pod.Spec.Overhead.Memory().Value()
 		}
 	}
-	var res Resource
-	res.Add(requests)
-	return res, non0CPU, non0Mem
+
+	return
 }
 
 // updateUsedPorts updates the UsedPorts of NodeInfo.

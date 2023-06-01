@@ -131,7 +131,7 @@ func NodeAddress(nodeIPs []net.IP, // typically Kubelet.nodeIPs
 				return err
 			}
 
-			nodeAddresses, err := cloudprovidernodeutil.GetNodeAddressesFromNodeIPLegacy(nodeIP, cloudNodeAddresses)
+			nodeAddresses, err := cloudprovidernodeutil.PreferNodeIP(nodeIP, cloudNodeAddresses)
 			if err != nil {
 				return err
 			}

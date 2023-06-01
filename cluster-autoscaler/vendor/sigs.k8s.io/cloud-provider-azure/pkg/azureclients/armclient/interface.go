@@ -80,16 +80,10 @@ type Interface interface {
 	// HeadResource heads a resource by resource ID
 	HeadResource(ctx context.Context, resourceID string) (*http.Response, *retry.Error)
 
-	// GetResourceWithExpandQuery get a resource by resource ID with expand
+	// GetResourceWithExpandQuery get a resource by resource ID
 	GetResourceWithExpandQuery(ctx context.Context, resourceID, expand string) (*http.Response, *retry.Error)
 
-	// GetResourceWithExpandAPIVersionQuery get a resource by resource ID with expand and API version.
-	GetResourceWithExpandAPIVersionQuery(ctx context.Context, resourceID, expand, apiVersion string) (*http.Response, *retry.Error)
-
-	// GetResourceWithQueries get a resource by resource ID with queries.
-	GetResourceWithQueries(ctx context.Context, resourceID string, queries map[string]interface{}) (*http.Response, *retry.Error)
-
-	// GetResource get a resource with decorators by resource ID
+	//GetResourceWithDecorators get a resource with decorators by resource ID
 	GetResource(ctx context.Context, resourceID string, decorators ...autorest.PrepareDecorator) (*http.Response, *retry.Error)
 
 	// PostResource posts a resource by resource ID
