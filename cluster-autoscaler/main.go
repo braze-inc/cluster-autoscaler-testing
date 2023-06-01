@@ -65,9 +65,9 @@ import (
 	"k8s.io/component-base/config/options"
 	"k8s.io/component-base/metrics/legacyregistry"
 	"k8s.io/klog/v2"
-
-    httptrace "gopkg.in/DataDog/dd-trace-go.v1/contrib/net/http"
-    "gopkg.in/DataDog/dd-trace-go.v1/ddtrace/tracer"
+	
+	httptrace "gopkg.in/DataDog/dd-trace-go.v1/contrib/net/http"
+	"gopkg.in/DataDog/dd-trace-go.v1/ddtrace/tracer"
 )
 
 // MultiStringFlag is a flag for passing multiple parameters using same flag
