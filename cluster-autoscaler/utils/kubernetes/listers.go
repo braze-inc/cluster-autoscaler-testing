@@ -197,9 +197,6 @@ func listScheduledAndUnschedulablePods(wg *sync.WaitGroup, workerId int, podsCha
 	defer wg.Done()
 
 	for pod := range podsChan {
-		if pod == nil {
-			klog.Infof("+++ Pod was nil in List()")
-		}
 		if pod.Spec.NodeName != "" {
 			//_scheduledPods = append(_scheduledPods, pod)
 			scheduledPodsChan <- pod
@@ -212,7 +209,6 @@ func listScheduledAndUnschedulablePods(wg *sync.WaitGroup, workerId int, podsCha
 			//_unschedulablePods = append(_unschedulablePods, pod)
 		}
 	}
-
 }
 
 // List returns all scheduled and unschedulable pods.
@@ -237,7 +233,6 @@ func (lister *scheduledAndUnschedulablePodLister) List() (scheduledPods []*apiv1
 	klog.Infof("+++ Spinning up %v workers", threads)
 	for i := 0; i < threads; i++ {
 		go func(workerId int) {
-			klog.Infof("+++ Spinning up worker #%v", workerId)
 			listScheduledAndUnschedulablePods(&wg, workerId, podsChan, scheduledPodsChan, unschedulablePodsChan)
 		}(i)
 	}
@@ -246,10 +241,12 @@ func (lister *scheduledAndUnschedulablePodLister) List() (scheduledPods []*apiv1
 	for _, pod := range allPods {
 		podsChan <- pod
 	}
-	close(podsChan)
-	wg.Wait()
-	close(scheduledPodsChan)
-	close(unschedulablePodsChan)
+	go func() {
+		close(podsChan)
+		wg.Wait()
+		close(scheduledPodsChan)
+		close(unschedulablePodsChan)
+	}()
 
 	for p := range scheduledPodsChan {
 		_scheduledPods = append(_scheduledPods, p)
