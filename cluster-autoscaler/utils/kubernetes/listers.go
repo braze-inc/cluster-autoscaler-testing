@@ -17,9 +17,10 @@ limitations under the License.
 package kubernetes
 
 import (
-	"k8s.io/klog/v2"
 	"sync"
 	"time"
+
+	"k8s.io/klog/v2"
 
 	appsv1 "k8s.io/api/apps/v1"
 	batchv1 "k8s.io/api/batch/v1"
@@ -190,14 +191,45 @@ type scheduledAndUnschedulablePodLister struct {
 	podLister v1lister.PodLister
 }
 
+// func listScheduledAndUnschedulablePods(wg *sync.WaitGroup, workerId int, podsChan chan *apiv1.Pod) (scheduledPods []*apiv1.Pod, unschedulablePods []*apiv1.Pod) {
+func listScheduledAndUnschedulablePods(wg *sync.WaitGroup, workerId int, podsChan chan *apiv1.Pod, scheduledPodsChan chan *apiv1.Pod, unschedulablePodsChan chan *apiv1.Pod) {
+
+	defer wg.Done()
+
+	for pod := range podsChan {
+		if pod == nil {
+			klog.Infof("+++ Pod was nil in List()")
+		}
+		if pod.Spec.NodeName != "" {
+			//_scheduledPods = append(_scheduledPods, pod)
+			scheduledPodsChan <- pod
+			continue
+		}
+		_, condition := podv1.GetPodCondition(&pod.Status, apiv1.PodScheduled)
+		if condition != nil && condition.Status == apiv1.ConditionFalse && condition.Reason == apiv1.PodReasonUnschedulable {
+			//_unschedulablePods = append(_unschedulablePods, pod)
+			unschedulablePodsChan <- pod
+			//_unschedulablePods = append(_unschedulablePods, pod)
+		}
+	}
+
+}
+
 // List returns all scheduled and unschedulable pods.
 func (lister *scheduledAndUnschedulablePodLister) List() (scheduledPods []*apiv1.Pod, unschedulablePods []*apiv1.Pod, err error) {
+
+	_scheduledPods := make([]*apiv1.Pod, 0)
+	_unschedulablePods := make([]*apiv1.Pod, 0)
+
 	allPods, err := lister.podLister.List(labels.Everything())
 	if err != nil {
-		return scheduledPods, unschedulablePods, err
+		return _scheduledPods, _unschedulablePods, err
 	}
 
 	podsChan := make(chan *apiv1.Pod, 1000)
+	scheduledPodsChan := make(chan *apiv1.Pod, 1000)
+	unschedulablePodsChan := make(chan *apiv1.Pod, 1000)
+
 	threads := 5
 	var wg sync.WaitGroup
 	wg.Add(threads)
@@ -206,20 +238,7 @@ func (lister *scheduledAndUnschedulablePodLister) List() (scheduledPods []*apiv1
 	for i := 0; i < threads; i++ {
 		go func(workerId int) {
 			klog.Infof("+++ Spinning up worker #%v", workerId)
-			defer wg.Done()
-			for pod := range podsChan {
-				if pod == nil {
-					klog.Infof("+++ Pod was nil in List()")
-				}
-				if pod.Spec.NodeName != "" {
-					scheduledPods = append(scheduledPods, pod)
-					continue
-				}
-				_, condition := podv1.GetPodCondition(&pod.Status, apiv1.PodScheduled)
-				if condition != nil && condition.Status == apiv1.ConditionFalse && condition.Reason == apiv1.PodReasonUnschedulable {
-					unschedulablePods = append(unschedulablePods, pod)
-				}
-			}
+			listScheduledAndUnschedulablePods(&wg, workerId, podsChan, scheduledPodsChan, unschedulablePodsChan)
 		}(i)
 	}
 
@@ -229,9 +248,18 @@ func (lister *scheduledAndUnschedulablePodLister) List() (scheduledPods []*apiv1
 	}
 	close(podsChan)
 	wg.Wait()
+	close(scheduledPodsChan)
+	close(unschedulablePodsChan)
 
-	klog.Infof("+++ scheduled pod count: %v unscheduled pod count: %v", len(scheduledPods), len(unschedulablePods))
-	return scheduledPods, unschedulablePods, nil
+	for p := range scheduledPodsChan {
+		_scheduledPods = append(_scheduledPods, p)
+	}
+	for p := range unschedulablePodsChan {
+		_unschedulablePods = append(_unschedulablePods, p)
+	}
+
+	klog.Infof("+++ scheduled pod count: %v unscheduled pod count: %v", len(_scheduledPods), len(_unschedulablePods))
+	return _scheduledPods, _unschedulablePods, nil
 }
 
 // NewScheduledAndUnschedulablePodLister builds ScheduledAndUnschedulablePodLister
