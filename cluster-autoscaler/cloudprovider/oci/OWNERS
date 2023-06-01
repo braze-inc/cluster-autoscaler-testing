@@ -1,13 +1,5 @@
 approvers:
-- jlamillan
-#- trungng92
-#- sohan-oracle
-
+#- jlamillan
 reviewers:
-- jlamillan
-#- trungng92
-#- sohan-oracle
+#- jlamillan
 #- ericrrath
-
-labels:
-- area/provider/oci

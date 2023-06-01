@@ -44,22 +44,20 @@ type cacheItem struct {
 
 // MixedTemplateNodeInfoProvider build nodeInfos from the cluster's nodes and node groups.
 type MixedTemplateNodeInfoProvider struct {
-	nodeInfoCache   map[string]cacheItem
-	ttl             time.Duration
-	forceDaemonSets bool
+	nodeInfoCache map[string]cacheItem
+	ttl           time.Duration
 }
 
 // NewMixedTemplateNodeInfoProvider returns a NodeInfoProvider processor building
 // NodeInfos from real-world nodes when available, otherwise from node groups templates.
-func NewMixedTemplateNodeInfoProvider(t *time.Duration, forceDaemonSets bool) *MixedTemplateNodeInfoProvider {
+func NewMixedTemplateNodeInfoProvider(t *time.Duration) *MixedTemplateNodeInfoProvider {
 	ttl := maxCacheExpireTime
 	if t != nil {
 		ttl = *t
 	}
 	return &MixedTemplateNodeInfoProvider{
-		nodeInfoCache:   make(map[string]cacheItem),
-		ttl:             ttl,
-		forceDaemonSets: forceDaemonSets,
+		nodeInfoCache: make(map[string]cacheItem),
+		ttl:           ttl,
 	}
 }
 
@@ -72,7 +70,7 @@ func (p *MixedTemplateNodeInfoProvider) CleanUp() {
 }
 
 // Process returns the nodeInfos set for this cluster
-func (p *MixedTemplateNodeInfoProvider) Process(ctx *context.AutoscalingContext, nodes []*apiv1.Node, daemonsets []*appsv1.DaemonSet, taintConfig taints.TaintConfig, now time.Time) (map[string]*schedulerframework.NodeInfo, errors.AutoscalerError) {
+func (p *MixedTemplateNodeInfoProvider) Process(ctx *context.AutoscalingContext, nodes []*apiv1.Node, daemonsets []*appsv1.DaemonSet, ignoredTaints taints.TaintKeySet, now time.Time) (map[string]*schedulerframework.NodeInfo, errors.AutoscalerError) {
 	// TODO(mwielgus): This returns map keyed by url, while most code (including scheduler) uses node.Name for a key.
 	// TODO(mwielgus): Review error policy - sometimes we may continue with partial errors.
 	result := make(map[string]*schedulerframework.NodeInfo)
@@ -95,22 +93,14 @@ func (p *MixedTemplateNodeInfoProvider) Process(ctx *context.AutoscalingContext,
 		id := nodeGroup.Id()
 		if _, found := result[id]; !found {
 			// Build nodeInfo.
-			sanitizedNode, err := utils.SanitizeNode(node, id, taintConfig)
+			nodeInfo, err := simulator.BuildNodeInfoForNode(node, podsForNodes)
 			if err != nil {
 				return false, "", err
 			}
-			nodeInfo, err := simulator.BuildNodeInfoForNode(sanitizedNode, podsForNodes[node.Name], daemonsets, p.forceDaemonSets)
+			sanitizedNodeInfo, err := utils.SanitizeNodeInfo(nodeInfo, id, ignoredTaints)
 			if err != nil {
 				return false, "", err
 			}
-
-			var pods []*apiv1.Pod
-			for _, podInfo := range nodeInfo.Pods {
-				pods = append(pods, podInfo.Pod)
-			}
-
-			sanitizedNodeInfo := schedulerframework.NewNodeInfo(utils.SanitizePods(pods, sanitizedNode)...)
-			sanitizedNodeInfo.SetNode(sanitizedNode)
 			result[id] = sanitizedNodeInfo
 			return true, id, nil
 		}
@@ -127,8 +117,9 @@ func (p *MixedTemplateNodeInfoProvider) Process(ctx *context.AutoscalingContext,
 			return map[string]*schedulerframework.NodeInfo{}, typedErr
 		}
 		if added && p.nodeInfoCache != nil {
-			nodeInfoCopy := utils.DeepCopyNodeInfo(result[id])
-			p.nodeInfoCache[id] = cacheItem{NodeInfo: nodeInfoCopy, added: time.Now()}
+			if nodeInfoCopy, err := utils.DeepCopyNodeInfo(result[id]); err == nil {
+				p.nodeInfoCache[id] = cacheItem{NodeInfo: nodeInfoCopy, added: time.Now()}
+			}
 		}
 	}
 	for _, nodeGroup := range ctx.CloudProvider.NodeGroups() {
@@ -143,8 +134,8 @@ func (p *MixedTemplateNodeInfoProvider) Process(ctx *context.AutoscalingContext,
 			if cacheItem, found := p.nodeInfoCache[id]; found {
 				if p.isCacheItemExpired(cacheItem.added) {
 					delete(p.nodeInfoCache, id)
-				} else {
-					result[id] = utils.DeepCopyNodeInfo(cacheItem.NodeInfo)
+				} else if nodeInfoCopy, err := utils.DeepCopyNodeInfo(cacheItem.NodeInfo); err == nil {
+					result[id] = nodeInfoCopy
 					continue
 				}
 			}
@@ -152,7 +143,7 @@ func (p *MixedTemplateNodeInfoProvider) Process(ctx *context.AutoscalingContext,
 
 		// No good template, trying to generate one. This is called only if there are no
 		// working nodes in the node groups. By default CA tries to use a real-world example.
-		nodeInfo, err := utils.GetNodeInfoFromTemplate(nodeGroup, daemonsets, taintConfig)
+		nodeInfo, err := utils.GetNodeInfoFromTemplate(nodeGroup, daemonsets, ctx.PredicateChecker, ignoredTaints)
 		if err != nil {
 			if err == cloudprovider.ErrNotImplemented {
 				continue

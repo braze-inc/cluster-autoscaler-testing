@@ -19,7 +19,6 @@ package brightbox
 import (
 	"errors"
 	"strconv"
-	"strings"
 	"testing"
 
 	"github.com/stretchr/testify/assert"
@@ -59,13 +58,8 @@ var (
 		"zone":          fakeNodeGroupZoneID,
 		"user_data":     fakeNodeGroupUserData,
 	}
-	fakeMainGroupList           = []string{fakeNodeGroupID, fakeNodeGroupMainGroupID}
-	fakeAdditionalGroupList     = []string{"grp-abcde", "grp-testy", "grp-winga"}
-	fakeFullGroupList           = append(fakeMainGroupList, fakeAdditionalGroupList...)
-	fakeAdditionalGroups        = strings.Join(fakeAdditionalGroupList, ",")
-	fakeDefaultAdditionalGroups = fakeNodeGroupMainGroupID + "," + fakeAdditionalGroups
-	ErrFake                     = errors.New("fake API Error")
-	fakeInstances               = []cloudprovider.Instance{
+	ErrFake       = errors.New("fake API Error")
+	fakeInstances = []cloudprovider.Instance{
 		{
 			Id: "brightbox://srv-rp897",
 			Status: &cloudprovider.InstanceStatus{
@@ -118,17 +112,17 @@ var (
 )
 
 func TestMaxSize(t *testing.T) {
-	assert.Equal(t, makeFakeNodeGroup(t, nil).MaxSize(), fakeMaxSize)
+	assert.Equal(t, makeFakeNodeGroup(nil).MaxSize(), fakeMaxSize)
 }
 
 func TestMinSize(t *testing.T) {
-	assert.Equal(t, makeFakeNodeGroup(t, nil).MinSize(), fakeMinSize)
+	assert.Equal(t, makeFakeNodeGroup(nil).MinSize(), fakeMinSize)
 }
 
 func TestSize(t *testing.T) {
 	mockclient := new(mocks.CloudAccess)
 	testclient := k8ssdk.MakeTestClient(mockclient, nil)
-	nodeGroup := makeFakeNodeGroup(t, testclient)
+	nodeGroup := makeFakeNodeGroup(testclient)
 	fakeServerGroup := &fakeGroups()[0]
 	t.Run("TargetSize", func(t *testing.T) {
 		mockclient.On("ServerGroup", fakeNodeGroupID).
@@ -174,7 +168,7 @@ func TestSize(t *testing.T) {
 func TestIncreaseSize(t *testing.T) {
 	mockclient := new(mocks.CloudAccess)
 	testclient := k8ssdk.MakeTestClient(mockclient, nil)
-	nodeGroup := makeFakeNodeGroup(t, testclient)
+	nodeGroup := makeFakeNodeGroup(testclient)
 	t.Run("Creating details set properly", func(t *testing.T) {
 		assert.Equal(t, fakeNodeGroupID, nodeGroup.id)
 		assert.Equal(t, fakeNodeGroupName, *nodeGroup.serverOptions.Name)
@@ -218,7 +212,7 @@ func TestIncreaseSize(t *testing.T) {
 func TestDeleteNodes(t *testing.T) {
 	mockclient := new(mocks.CloudAccess)
 	testclient := k8ssdk.MakeTestClient(mockclient, nil)
-	nodeGroup := makeFakeNodeGroup(t, testclient)
+	nodeGroup := makeFakeNodeGroup(testclient)
 	fakeServerGroup := &fakeGroups()[0]
 	mockclient.On("ServerGroup", fakeNodeGroupID).
 		Return(fakeServerGroup, nil).
@@ -264,7 +258,7 @@ func TestDeleteNodes(t *testing.T) {
 func TestExist(t *testing.T) {
 	mockclient := new(mocks.CloudAccess)
 	testclient := k8ssdk.MakeTestClient(mockclient, nil)
-	nodeGroup := makeFakeNodeGroup(t, testclient)
+	nodeGroup := makeFakeNodeGroup(testclient)
 	fakeServerGroup := &fakeGroups()[0]
 	t.Run("Find Group", func(t *testing.T) {
 		mockclient.On("ServerGroup", nodeGroup.Id()).
@@ -282,7 +276,7 @@ func TestExist(t *testing.T) {
 func TestNodes(t *testing.T) {
 	mockclient := new(mocks.CloudAccess)
 	testclient := k8ssdk.MakeTestClient(mockclient, nil)
-	nodeGroup := makeFakeNodeGroup(t, testclient)
+	nodeGroup := makeFakeNodeGroup(testclient)
 	fakeServerGroup := &fakeGroups()[0]
 	mockclient.On("ServerGroup", fakeNodeGroupID).
 		Return(fakeServerGroup, nil)
@@ -314,117 +308,23 @@ func TestTemplateNodeInfo(t *testing.T) {
 	testclient := k8ssdk.MakeTestClient(mockclient, nil)
 	mockclient.On("ServerType", fakeNodeGroupServerTypeID).
 		Return(fakeServerTypezx45f(), nil)
-	obj, err := makeFakeNodeGroup(t, testclient).TemplateNodeInfo()
+	obj, err := makeFakeNodeGroup(testclient).TemplateNodeInfo()
 	require.NoError(t, err)
 	assert.Equal(t, fakeResource(), obj.Allocatable)
 }
 
-func TestNodeGroupErrors(t *testing.T) {
-	mockclient := new(mocks.CloudAccess)
-	testclient := k8ssdk.MakeTestClient(mockclient, nil)
-	emptyMapData := map[string]string{}
-	obj, err := makeNodeGroupFromAPIDetails(
-		fakeNodeGroupName,
-		emptyMapData,
-		fakeMinSize,
-		fakeMaxSize,
-		testclient,
-	)
-	assert.Equal(t, cloudprovider.ErrIllegalConfiguration, err)
-	assert.Nil(t, obj)
-}
-
-func TestMultipleGroups(t *testing.T) {
-	mockclient := new(mocks.CloudAccess)
-	testclient := k8ssdk.MakeTestClient(mockclient, nil)
-	t.Run("server group and multi default group", func(t *testing.T) {
-		multigroupData := map[string]string{
-			"min":           strconv.Itoa(fakeMinSize),
-			"max":           strconv.Itoa(fakeMaxSize),
-			"image":         fakeNodeGroupImageID,
-			"type":          fakeNodeGroupServerTypeID,
-			"zone":          fakeNodeGroupZoneID,
-			"user_data":     fakeNodeGroupUserData,
-			"server_group":  fakeNodeGroupID,
-			"default_group": fakeDefaultAdditionalGroups,
-		}
-		obj, err := makeFakeNodeGroupFromMap(
-			testclient,
-			multigroupData,
-		)
-		require.NoError(t, err)
-		assert.ElementsMatch(t, fakeFullGroupList, obj.serverOptions.ServerGroups)
-	})
-	t.Run("server group and multi additional group", func(t *testing.T) {
-		multigroupData := map[string]string{
-			"min":               strconv.Itoa(fakeMinSize),
-			"max":               strconv.Itoa(fakeMaxSize),
-			"image":             fakeNodeGroupImageID,
-			"type":              fakeNodeGroupServerTypeID,
-			"zone":              fakeNodeGroupZoneID,
-			"user_data":         fakeNodeGroupUserData,
-			"server_group":      fakeNodeGroupID,
-			"additional_groups": fakeDefaultAdditionalGroups,
-		}
-		obj, err := makeFakeNodeGroupFromMap(
-			testclient,
-			multigroupData,
-		)
-		require.NoError(t, err)
-		assert.ElementsMatch(t, fakeFullGroupList, obj.serverOptions.ServerGroups)
-	})
-	t.Run("server group, default group and multi additional group", func(t *testing.T) {
-		multigroupData := map[string]string{
-			"min":               strconv.Itoa(fakeMinSize),
-			"max":               strconv.Itoa(fakeMaxSize),
-			"image":             fakeNodeGroupImageID,
-			"type":              fakeNodeGroupServerTypeID,
-			"zone":              fakeNodeGroupZoneID,
-			"user_data":         fakeNodeGroupUserData,
-			"server_group":      fakeNodeGroupID,
-			"default_group":     fakeNodeGroupMainGroupID,
-			"additional_groups": fakeAdditionalGroups,
-		}
-		obj, err := makeFakeNodeGroupFromMap(
-			testclient,
-			multigroupData,
-		)
-		require.NoError(t, err)
-		assert.ElementsMatch(t, fakeFullGroupList, obj.serverOptions.ServerGroups)
-	})
-	t.Run("server group, default group and multi additional group with duplicates", func(t *testing.T) {
-		multigroupData := map[string]string{
-			"min":               strconv.Itoa(fakeMinSize),
-			"max":               strconv.Itoa(fakeMaxSize),
-			"image":             fakeNodeGroupImageID,
-			"type":              fakeNodeGroupServerTypeID,
-			"zone":              fakeNodeGroupZoneID,
-			"user_data":         fakeNodeGroupUserData,
-			"server_group":      fakeNodeGroupID,
-			"default_group":     fakeNodeGroupMainGroupID,
-			"additional_groups": fakeDefaultAdditionalGroups,
-		}
-		obj, err := makeFakeNodeGroupFromMap(
-			testclient,
-			multigroupData,
-		)
-		require.NoError(t, err)
-		assert.ElementsMatch(t, fakeFullGroupList, obj.serverOptions.ServerGroups)
-	})
-}
-
 func TestCreate(t *testing.T) {
-	obj, err := makeFakeNodeGroup(t, nil).Create()
+	obj, err := makeFakeNodeGroup(nil).Create()
 	assert.Equal(t, cloudprovider.ErrNotImplemented, err)
 	assert.Nil(t, obj)
 }
 
 func TestDelete(t *testing.T) {
-	assert.Equal(t, cloudprovider.ErrNotImplemented, makeFakeNodeGroup(t, nil).Delete())
+	assert.Equal(t, cloudprovider.ErrNotImplemented, makeFakeNodeGroup(nil).Delete())
 }
 
 func TestAutoprovisioned(t *testing.T) {
-	assert.False(t, makeFakeNodeGroup(t, nil).Autoprovisioned())
+	assert.False(t, makeFakeNodeGroup(nil).Autoprovisioned())
 }
 
 func fakeResource() *schedulerframework.Resource {
@@ -436,19 +336,10 @@ func fakeResource() *schedulerframework.Resource {
 	}
 }
 
-func makeFakeNodeGroup(t *testing.T, brightboxCloudClient *k8ssdk.Cloud) *brightboxNodeGroup {
-	obj, err := makeFakeNodeGroupFromMap(
-		brightboxCloudClient,
-		fakeMapData,
-	)
-	require.NoError(t, err)
-	return obj
-}
-
-func makeFakeNodeGroupFromMap(brightboxCloudClient *k8ssdk.Cloud, mapData map[string]string) (*brightboxNodeGroup, error) {
+func makeFakeNodeGroup(brightboxCloudClient *k8ssdk.Cloud) *brightboxNodeGroup {
 	return makeNodeGroupFromAPIDetails(
 		fakeNodeGroupName,
-		mapData,
+		fakeMapData,
 		fakeMinSize,
 		fakeMaxSize,
 		brightboxCloudClient,

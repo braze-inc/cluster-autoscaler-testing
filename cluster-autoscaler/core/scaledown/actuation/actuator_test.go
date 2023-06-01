@@ -44,8 +44,8 @@ import (
 	. "k8s.io/autoscaler/cluster-autoscaler/core/test"
 	"k8s.io/autoscaler/cluster-autoscaler/simulator"
 	"k8s.io/autoscaler/cluster-autoscaler/simulator/utilization"
+	"k8s.io/autoscaler/cluster-autoscaler/utils/deletetaint"
 	kube_util "k8s.io/autoscaler/cluster-autoscaler/utils/kubernetes"
-	"k8s.io/autoscaler/cluster-autoscaler/utils/taints"
 	. "k8s.io/autoscaler/cluster-autoscaler/utils/test"
 )
 
@@ -228,10 +228,9 @@ func TestCropNodesToBudgets(t *testing.T) {
 				},
 			}
 			deleteOptions := simulator.NodeDeleteOptions{
-				SkipNodesWithSystemPods:           true,
-				SkipNodesWithLocalStorage:         true,
-				MinReplicaCount:                   0,
-				SkipNodesWithCustomControllerPods: true,
+				SkipNodesWithSystemPods:   true,
+				SkipNodesWithLocalStorage: true,
+				MinReplicaCount:           0,
 			}
 			ndr := deletiontracker.NewNodeDeletionTracker(1 * time.Hour)
 			for i := 0; i < tc.emptyDeletionsInProgress; i++ {
@@ -255,7 +254,7 @@ func TestCropNodesToBudgets(t *testing.T) {
 
 func TestStartDeletion(t *testing.T) {
 	testNg := testprovider.NewTestNodeGroup("test-ng", 0, 100, 3, true, false, "n1-standard-2", nil, nil)
-	toBeDeletedTaint := apiv1.Taint{Key: taints.ToBeDeletedTaint, Effect: apiv1.TaintEffectNoSchedule}
+	toBeDeletedTaint := apiv1.Taint{Key: deletetaint.ToBeDeletedTaint, Effect: apiv1.TaintEffectNoSchedule}
 
 	for tn, tc := range map[string]struct {
 		emptyNodes            []*apiv1.Node
@@ -829,7 +828,7 @@ func TestStartDeletion(t *testing.T) {
 			if err != nil {
 				t.Fatalf("Couldn't set up autoscaling context: %v", err)
 			}
-			csr := clusterstate.NewClusterStateRegistry(provider, clusterstate.ClusterStateRegistryConfig{}, ctx.LogRecorder, NewBackoff(), clusterstate.NewStaticMaxNodeProvisionTimeProvider(15*time.Minute))
+			csr := clusterstate.NewClusterStateRegistry(provider, clusterstate.ClusterStateRegistryConfig{}, ctx.LogRecorder, NewBackoff())
 			for _, node := range tc.emptyNodes {
 				err := ctx.ClusterSnapshot.AddNodeWithPods(node, tc.pods[node.Name])
 				if err != nil {
@@ -854,7 +853,7 @@ func TestStartDeletion(t *testing.T) {
 				nodeDeletionBatcher: NewNodeDeletionBatcher(&ctx, csr, ndt, 0*time.Second),
 				evictor:             Evictor{EvictionRetryTime: 0, DsEvictionRetryTime: 0, DsEvictionEmptyNodeTimeout: 0, PodEvictionHeadroom: DefaultPodEvictionHeadroom},
 			}
-			gotStatus, gotErr := actuator.StartDeletion(tc.emptyNodes, tc.drainNodes)
+			gotStatus, gotErr := actuator.StartDeletion(tc.emptyNodes, tc.drainNodes, time.Now())
 			if diff := cmp.Diff(tc.wantErr, gotErr, cmpopts.EquateErrors()); diff != "" {
 				t.Errorf("StartDeletion error diff (-want +got):\n%s", diff)
 			}
@@ -933,7 +932,7 @@ func TestStartDeletion(t *testing.T) {
 
 			// Run StartDeletion again to gather node deletion results for deletions started in the previous call, and verify
 			// that they look as expected.
-			gotNextStatus, gotNextErr := actuator.StartDeletion(nil, nil)
+			gotNextStatus, gotNextErr := actuator.StartDeletion(nil, nil, time.Now())
 			if gotNextErr != nil {
 				t.Errorf("StartDeletion unexpected error: %v", gotNextErr)
 			}
@@ -1078,7 +1077,7 @@ func TestStartDeletionInBatchBasic(t *testing.T) {
 			if err != nil {
 				t.Fatalf("Couldn't set up autoscaling context: %v", err)
 			}
-			csr := clusterstate.NewClusterStateRegistry(provider, clusterstate.ClusterStateRegistryConfig{}, ctx.LogRecorder, NewBackoff(), clusterstate.NewStaticMaxNodeProvisionTimeProvider(15*time.Minute))
+			csr := clusterstate.NewClusterStateRegistry(provider, clusterstate.ClusterStateRegistryConfig{}, ctx.LogRecorder, NewBackoff())
 			ndt := deletiontracker.NewNodeDeletionTracker(0)
 			actuator := Actuator{
 				ctx: &ctx, clusterState: csr, nodeDeletionTracker: ndt,
@@ -1087,7 +1086,7 @@ func TestStartDeletionInBatchBasic(t *testing.T) {
 			}
 
 			for _, nodes := range deleteNodes {
-				actuator.StartDeletion(nodes, []*apiv1.Node{})
+				actuator.StartDeletion(nodes, []*apiv1.Node{}, time.Now())
 				time.Sleep(deleteInterval)
 			}
 			wantDeletedNodes := 0

@@ -364,9 +364,8 @@ func (o ServerCreateOpts) Validate() error {
 		return errors.New("location and datacenter are mutually exclusive")
 	}
 	if o.PublicNet != nil {
-		if !o.PublicNet.EnableIPv4 && !o.PublicNet.EnableIPv6 &&
-			len(o.Networks) == 0 && (o.StartAfterCreate == nil || *o.StartAfterCreate) {
-			return errors.New("missing networks or StartAfterCreate == false when EnableIPv4 and EnableIPv6 is false")
+		if !o.PublicNet.EnableIPv4 && !o.PublicNet.EnableIPv6 && len(o.Networks) == 0 {
+			return errors.New("missing networks when EnableIPv4 and EnableIPv6 is false")
 		}
 	}
 	return nil
@@ -474,35 +473,13 @@ func (c *ServerClient) Create(ctx context.Context, opts ServerCreateOpts) (Serve
 	return result, resp, nil
 }
 
-// ServerDeleteResult is the result of a delete server call.
-type ServerDeleteResult struct {
-	Action *Action
-}
-
 // Delete deletes a server.
-//
-// Deprecated: Use [ServerClient.DeleteWithResult] instead.
 func (c *ServerClient) Delete(ctx context.Context, server *Server) (*Response, error) {
-	_, resp, err := c.DeleteWithResult(ctx, server)
-	return resp, err
-}
-
-// DeleteWithResult deletes a server and returns the parsed response containing the action.
-func (c *ServerClient) DeleteWithResult(ctx context.Context, server *Server) (*ServerDeleteResult, *Response, error) {
 	req, err := c.client.NewRequest(ctx, "DELETE", fmt.Sprintf("/servers/%d", server.ID), nil)
 	if err != nil {
-		return &ServerDeleteResult{}, nil, err
+		return nil, err
 	}
-
-	var respBody schema.ServerDeleteResponse
-	resp, err := c.client.Do(req, &respBody)
-	if err != nil {
-		return &ServerDeleteResult{}, resp, err
-	}
-
-	return &ServerDeleteResult{
-		Action: ActionFromSchema(respBody.Action),
-	}, resp, nil
+	return c.client.Do(req, nil)
 }
 
 // ServerUpdateOpts specifies options for updating a server.
@@ -681,7 +658,7 @@ func (c *ServerClient) CreateImage(ctx context.Context, server *Server, opts *Se
 			reqBody.Description = opts.Description
 		}
 		if opts.Type != "" {
-			reqBody.Type = Ptr(string(opts.Type))
+			reqBody.Type = String(string(opts.Type))
 		}
 		if opts.Labels != nil {
 			reqBody.Labels = &opts.Labels
@@ -724,7 +701,7 @@ type ServerEnableRescueResult struct {
 // EnableRescue enables rescue mode for a server.
 func (c *ServerClient) EnableRescue(ctx context.Context, server *Server, opts ServerEnableRescueOpts) (ServerEnableRescueResult, *Response, error) {
 	reqBody := schema.ServerActionEnableRescueRequest{
-		Type: Ptr(string(opts.Type)),
+		Type: String(string(opts.Type)),
 	}
 	for _, sshKey := range opts.SSHKeys {
 		reqBody.SSHKeys = append(reqBody.SSHKeys, sshKey.ID)
@@ -773,23 +750,8 @@ type ServerRebuildOpts struct {
 	Image *Image
 }
 
-// ServerRebuildResult is the result of a create server call.
-type ServerRebuildResult struct {
-	Action       *Action
-	RootPassword string
-}
-
 // Rebuild rebuilds a server.
-//
-// Deprecated: Use [ServerClient.RebuildWithResult] instead.
 func (c *ServerClient) Rebuild(ctx context.Context, server *Server, opts ServerRebuildOpts) (*Action, *Response, error) {
-	result, resp, err := c.RebuildWithResult(ctx, server, opts)
-
-	return result.Action, resp, err
-}
-
-// RebuildWithResult rebuilds a server.
-func (c *ServerClient) RebuildWithResult(ctx context.Context, server *Server, opts ServerRebuildOpts) (ServerRebuildResult, *Response, error) {
 	reqBody := schema.ServerActionRebuildRequest{}
 	if opts.Image.ID != 0 {
 		reqBody.Image = opts.Image.ID
@@ -798,29 +760,21 @@ func (c *ServerClient) RebuildWithResult(ctx context.Context, server *Server, op
 	}
 	reqBodyData, err := json.Marshal(reqBody)
 	if err != nil {
-		return ServerRebuildResult{}, nil, err
+		return nil, nil, err
 	}
 
 	path := fmt.Sprintf("/servers/%d/actions/rebuild", server.ID)
 	req, err := c.client.NewRequest(ctx, "POST", path, bytes.NewReader(reqBodyData))
 	if err != nil {
-		return ServerRebuildResult{}, nil, err
+		return nil, nil, err
 	}
 
 	respBody := schema.ServerActionRebuildResponse{}
 	resp, err := c.client.Do(req, &respBody)
 	if err != nil {
-		return ServerRebuildResult{}, resp, err
+		return nil, resp, err
 	}
-
-	result := ServerRebuildResult{
-		Action: ActionFromSchema(respBody.Action),
-	}
-	if respBody.RootPassword != nil {
-		result.RootPassword = *respBody.RootPassword
-	}
-
-	return result, resp, nil
+	return ActionFromSchema(respBody.Action), resp, nil
 }
 
 // AttachISO attaches an ISO to a server.
@@ -872,7 +826,7 @@ func (c *ServerClient) DetachISO(ctx context.Context, server *Server) (*Action, 
 func (c *ServerClient) EnableBackup(ctx context.Context, server *Server, window string) (*Action, *Response, error) {
 	reqBody := schema.ServerActionEnableBackupRequest{}
 	if window != "" {
-		reqBody.BackupWindow = Ptr(window)
+		reqBody.BackupWindow = String(window)
 	}
 	reqBodyData, err := json.Marshal(reqBody)
 	if err != nil {
@@ -1025,10 +979,10 @@ func (c *ServerClient) AttachToNetwork(ctx context.Context, server *Server, opts
 		Network: opts.Network.ID,
 	}
 	if opts.IP != nil {
-		reqBody.IP = Ptr(opts.IP.String())
+		reqBody.IP = String(opts.IP.String())
 	}
 	for _, aliasIP := range opts.AliasIPs {
-		reqBody.AliasIPs = append(reqBody.AliasIPs, Ptr(aliasIP.String()))
+		reqBody.AliasIPs = append(reqBody.AliasIPs, String(aliasIP.String()))
 	}
 	reqBodyData, err := json.Marshal(reqBody)
 	if err != nil {

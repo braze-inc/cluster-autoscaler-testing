@@ -28,7 +28,7 @@ type InstanceType struct {
 }
 
 // StaticListLastUpdateTime is a string declaring the last time the static list was updated.
-var StaticListLastUpdateTime = "2023-02-14"
+var StaticListLastUpdateTime = "2022-12-11"
 
 // InstanceTypes is a map of ec2 resources
 var InstanceTypes = map[string]*InstanceType{
@@ -953,13 +953,6 @@ var InstanceTypes = map[string]*InstanceType{
 		InstanceType: "c7g.medium",
 		VCPU:         1,
 		MemoryMb:     2048,
-		GPU:          0,
-		Architecture: "arm64",
-	},
-	"c7g.metal": {
-		InstanceType: "c7g.metal",
-		VCPU:         64,
-		MemoryMb:     131072,
 		GPU:          0,
 		Architecture: "arm64",
 	},
@@ -2685,69 +2678,6 @@ var InstanceTypes = map[string]*InstanceType{
 		GPU:          0,
 		Architecture: "amd64",
 	},
-	"m7g.12xlarge": {
-		InstanceType: "m7g.12xlarge",
-		VCPU:         48,
-		MemoryMb:     196608,
-		GPU:          0,
-		Architecture: "arm64",
-	},
-	"m7g.16xlarge": {
-		InstanceType: "m7g.16xlarge",
-		VCPU:         64,
-		MemoryMb:     262144,
-		GPU:          0,
-		Architecture: "arm64",
-	},
-	"m7g.2xlarge": {
-		InstanceType: "m7g.2xlarge",
-		VCPU:         8,
-		MemoryMb:     32768,
-		GPU:          0,
-		Architecture: "arm64",
-	},
-	"m7g.4xlarge": {
-		InstanceType: "m7g.4xlarge",
-		VCPU:         16,
-		MemoryMb:     65536,
-		GPU:          0,
-		Architecture: "arm64",
-	},
-	"m7g.8xlarge": {
-		InstanceType: "m7g.8xlarge",
-		VCPU:         32,
-		MemoryMb:     131072,
-		GPU:          0,
-		Architecture: "arm64",
-	},
-	"m7g.large": {
-		InstanceType: "m7g.large",
-		VCPU:         2,
-		MemoryMb:     8192,
-		GPU:          0,
-		Architecture: "arm64",
-	},
-	"m7g.medium": {
-		InstanceType: "m7g.medium",
-		VCPU:         1,
-		MemoryMb:     4096,
-		GPU:          0,
-		Architecture: "arm64",
-	},
-	"m7g.metal": {
-		InstanceType: "m7g.metal",
-		VCPU:         64,
-		MemoryMb:     262144,
-		GPU:          0,
-		Architecture: "arm64",
-	},
-	"m7g.xlarge": {
-		InstanceType: "m7g.xlarge",
-		VCPU:         4,
-		MemoryMb:     16384,
-		GPU:          0,
-		Architecture: "arm64",
-	},
 	"mac1.metal": {
 		InstanceType: "mac1.metal",
 		VCPU:         12,
@@ -2813,13 +2743,6 @@ var InstanceTypes = map[string]*InstanceType{
 	},
 	"p4d.24xlarge": {
 		InstanceType: "p4d.24xlarge",
-		VCPU:         96,
-		MemoryMb:     1179648,
-		GPU:          8,
-		Architecture: "amd64",
-	},
-	"p4de.24xlarge": {
-		InstanceType: "p4de.24xlarge",
 		VCPU:         96,
 		MemoryMb:     1179648,
 		GPU:          8,
@@ -3797,69 +3720,6 @@ var InstanceTypes = map[string]*InstanceType{
 		MemoryMb:     32768,
 		GPU:          0,
 		Architecture: "amd64",
-	},
-	"r7g.12xlarge": {
-		InstanceType: "r7g.12xlarge",
-		VCPU:         48,
-		MemoryMb:     393216,
-		GPU:          0,
-		Architecture: "arm64",
-	},
-	"r7g.16xlarge": {
-		InstanceType: "r7g.16xlarge",
-		VCPU:         64,
-		MemoryMb:     524288,
-		GPU:          0,
-		Architecture: "arm64",
-	},
-	"r7g.2xlarge": {
-		InstanceType: "r7g.2xlarge",
-		VCPU:         8,
-		MemoryMb:     65536,
-		GPU:          0,
-		Architecture: "arm64",
-	},
-	"r7g.4xlarge": {
-		InstanceType: "r7g.4xlarge",
-		VCPU:         16,
-		MemoryMb:     131072,
-		GPU:          0,
-		Architecture: "arm64",
-	},
-	"r7g.8xlarge": {
-		InstanceType: "r7g.8xlarge",
-		VCPU:         32,
-		MemoryMb:     262144,
-		GPU:          0,
-		Architecture: "arm64",
-	},
-	"r7g.large": {
-		InstanceType: "r7g.large",
-		VCPU:         2,
-		MemoryMb:     16384,
-		GPU:          0,
-		Architecture: "arm64",
-	},
-	"r7g.medium": {
-		InstanceType: "r7g.medium",
-		VCPU:         1,
-		MemoryMb:     8192,
-		GPU:          0,
-		Architecture: "arm64",
-	},
-	"r7g.metal": {
-		InstanceType: "r7g.metal",
-		VCPU:         64,
-		MemoryMb:     524288,
-		GPU:          0,
-		Architecture: "arm64",
-	},
-	"r7g.xlarge": {
-		InstanceType: "r7g.xlarge",
-		VCPU:         4,
-		MemoryMb:     32768,
-		GPU:          0,
-		Architecture: "arm64",
 	},
 	"t1.micro": {
 		InstanceType: "t1.micro",

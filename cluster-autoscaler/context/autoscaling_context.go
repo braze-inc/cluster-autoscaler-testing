@@ -21,7 +21,6 @@ import (
 	"k8s.io/autoscaler/cluster-autoscaler/clusterstate/utils"
 	"k8s.io/autoscaler/cluster-autoscaler/config"
 	"k8s.io/autoscaler/cluster-autoscaler/core/scaledown"
-	"k8s.io/autoscaler/cluster-autoscaler/core/scaledown/pdb"
 	"k8s.io/autoscaler/cluster-autoscaler/debuggingsnapshot"
 	"k8s.io/autoscaler/cluster-autoscaler/estimator"
 	"k8s.io/autoscaler/cluster-autoscaler/expander"
@@ -58,8 +57,6 @@ type AutoscalingContext struct {
 	DebuggingSnapshotter debuggingsnapshot.DebuggingSnapshotter
 	// ScaleDownActuator is the interface for draining and deleting nodes
 	ScaleDownActuator scaledown.Actuator
-	// RemainingPdbTracker tracks the remaining pod disruption budget
-	RemainingPdbTracker pdb.RemainingPdbTracker
 }
 
 // AutoscalingKubeClients contains all Kubernetes API clients,
@@ -104,8 +101,7 @@ func NewAutoscalingContext(
 	expanderStrategy expander.Strategy,
 	estimatorBuilder estimator.EstimatorBuilder,
 	processorCallbacks processor_callbacks.ProcessorCallbacks,
-	debuggingSnapshotter debuggingsnapshot.DebuggingSnapshotter,
-	remainingPdbTracker pdb.RemainingPdbTracker) *AutoscalingContext {
+	debuggingSnapshotter debuggingsnapshot.DebuggingSnapshotter) *AutoscalingContext {
 	return &AutoscalingContext{
 		AutoscalingOptions:     options,
 		CloudProvider:          cloudProvider,
@@ -116,7 +112,6 @@ func NewAutoscalingContext(
 		EstimatorBuilder:       estimatorBuilder,
 		ProcessorCallbacks:     processorCallbacks,
 		DebuggingSnapshotter:   debuggingSnapshotter,
-		RemainingPdbTracker:    remainingPdbTracker,
 	}
 }
 

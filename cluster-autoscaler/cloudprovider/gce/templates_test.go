@@ -65,8 +65,7 @@ func TestBuildNodeFromTemplateSetsResources(t *testing.T) {
 		ephemeralStorageLocalSSDCount int64
 		extendedResources             apiv1.ResourceList
 		// test outputs
-		expectedMigInfoErr      bool
-		expectedNodeTemplateErr bool
+		expectedErr bool
 	}
 	testCases := []testCase{
 		{
@@ -87,6 +86,7 @@ func TestBuildNodeFromTemplateSetsResources(t *testing.T) {
 			reservedCpu:              "1000m",
 			reservedMemory:           fmt.Sprintf("%v", 1*units.MiB),
 			reservedEphemeralStorage: "30Gi",
+			expectedErr:              false,
 		},
 		{
 			scenario: "no kube-reserved in kube-env",
@@ -97,16 +97,18 @@ func TestBuildNodeFromTemplateSetsResources(t *testing.T) {
 			physicalCpu:    8,
 			physicalMemory: 200 * units.MiB,
 			kubeReserved:   false,
+			expectedErr:    false,
 		}, {
 			scenario:       "no kube-env at all",
 			kubeEnv:        "",
 			physicalCpu:    8,
 			physicalMemory: 200 * units.MiB,
 			kubeReserved:   false,
+			expectedErr:    false,
 		}, {
-			scenario:           "totally messed up kube-env",
-			kubeEnv:            "This kube-env is totally messed up",
-			expectedMigInfoErr: true,
+			scenario:    "totally messed up kube-env",
+			kubeEnv:     "This kube-env is totally messed up",
+			expectedErr: true,
 		}, {
 			scenario:       "max pods per node specified",
 			kubeEnv:        "",
@@ -114,6 +116,7 @@ func TestBuildNodeFromTemplateSetsResources(t *testing.T) {
 			physicalMemory: 200 * units.MiB,
 			pods:           &thirtyPodsPerNode,
 			kubeReserved:   false,
+			expectedErr:    false,
 		},
 		{
 			scenario: "BLOCK_EPH_STORAGE_BOOT_DISK in kube-env",
@@ -130,22 +133,7 @@ func TestBuildNodeFromTemplateSetsResources(t *testing.T) {
 			reservedEphemeralStorage:  "0Gi",
 			kubeReserved:              true,
 			isEphemeralStorageBlocked: true,
-		},
-		{
-			scenario: "os_distribution is unset, should default to cos",
-			kubeEnv: "ENABLE_NODE_PROBLEM_DETECTOR: 'daemonset'\n" +
-				"NODE_LABELS: a=b,c=d,cloud.google.com/gke-nodepool=pool-3,cloud.google.com/gke-preemptible=true\n" +
-				"DNS_SERVER_IP: '10.0.0.10'\n" +
-				"AUTOSCALER_ENV_VARS: os_distribution=;os=linux;kube_reserved=cpu=0,memory=0,ephemeral-storage=0;BLOCK_EPH_STORAGE_BOOT_DISK=true\n" +
-				"NODE_TAINTS: 'dedicated=ml:NoSchedule,test=dev:PreferNoSchedule,a=b:c'\n",
-			physicalCpu:               8,
-			physicalMemory:            200 * units.MiB,
-			bootDiskSizeGiB:           300,
-			reservedCpu:               "0m",
-			reservedMemory:            fmt.Sprintf("%v", 0*units.MiB),
-			reservedEphemeralStorage:  "0Gi",
-			kubeReserved:              true,
-			isEphemeralStorageBlocked: true,
+			expectedErr:               false,
 		},
 		{
 			scenario: "BLOCK_EPH_STORAGE_BOOT_DISK is false in kube-env",
@@ -158,13 +146,14 @@ func TestBuildNodeFromTemplateSetsResources(t *testing.T) {
 			reservedMemory:           fmt.Sprintf("%v", 0*units.MiB),
 			reservedEphemeralStorage: "0Gi",
 			kubeReserved:             true,
+			expectedErr:              false,
 		},
 		{
 			scenario:                      "more local SSDs requested for ephemeral storage than attached",
 			kubeEnv:                       "AUTOSCALER_ENV_VARS: os_distribution=cos;os=linux;ephemeral_storage_local_ssd_count=1\n",
 			ephemeralStorageLocalSSDCount: 1,
 			attachedLocalSSDCount:         0,
-			expectedNodeTemplateErr:       true,
+			expectedErr:                   true,
 		},
 		{
 			scenario:                      "all attached local SSDs requested for ephemeral storage",
@@ -174,6 +163,7 @@ func TestBuildNodeFromTemplateSetsResources(t *testing.T) {
 			bootDiskSizeGiB:               300,
 			ephemeralStorageLocalSSDCount: 2,
 			attachedLocalSSDCount:         2,
+			expectedErr:                   false,
 		},
 		{
 			scenario:                      "more local SSDs attached than requested for ephemeral storage",
@@ -182,6 +172,7 @@ func TestBuildNodeFromTemplateSetsResources(t *testing.T) {
 			physicalMemory:                200 * units.MiB,
 			ephemeralStorageLocalSSDCount: 2,
 			attachedLocalSSDCount:         4,
+			expectedErr:                   false,
 		},
 		{
 			scenario:                      "ephemeral storage on local SSDs with kube-reserved",
@@ -194,6 +185,7 @@ func TestBuildNodeFromTemplateSetsResources(t *testing.T) {
 			reservedMemory:                fmt.Sprintf("%v", 0*units.MiB),
 			reservedEphemeralStorage:      "10Gi",
 			attachedLocalSSDCount:         4,
+			expectedErr:                   false,
 		},
 		{
 			scenario:                      "extended_resources present in kube-env",
@@ -206,6 +198,7 @@ func TestBuildNodeFromTemplateSetsResources(t *testing.T) {
 			reservedMemory:                fmt.Sprintf("%v", 0*units.MiB),
 			reservedEphemeralStorage:      "10Gi",
 			attachedLocalSSDCount:         4,
+			expectedErr:                   false,
 			extendedResources: apiv1.ResourceList{
 				apiv1.ResourceName("someResource"):    *resource.NewQuantity(2, resource.DecimalSI),
 				apiv1.ResourceName("anotherResource"): *resource.NewQuantity(1*units.GB, resource.DecimalSI),
@@ -222,6 +215,7 @@ func TestBuildNodeFromTemplateSetsResources(t *testing.T) {
 			reservedMemory:                fmt.Sprintf("%v", 0*units.MiB),
 			reservedEphemeralStorage:      "10Gi",
 			attachedLocalSSDCount:         4,
+			expectedErr:                   false,
 			extendedResources:             apiv1.ResourceList{},
 		},
 	}
@@ -262,13 +256,8 @@ func TestBuildNodeFromTemplateSetsResources(t *testing.T) {
 			if tc.kubeEnv != "" {
 				template.Properties.Metadata.Items = []*gce.MetadataItems{{Key: "kube-env", Value: &tc.kubeEnv}}
 			}
-			migOsInfo, err := tb.MigOsInfo(mig.Id(), template)
-			if tc.expectedMigInfoErr {
-				assert.Error(t, err)
-				return
-			}
-			node, err := tb.BuildNodeFromTemplate(mig, migOsInfo, template, tc.physicalCpu, tc.physicalMemory, tc.pods, &GceReserved{})
-			if tc.expectedNodeTemplateErr {
+			node, err := tb.BuildNodeFromTemplate(mig, template, tc.physicalCpu, tc.physicalMemory, tc.pods, &GceReserved{})
+			if tc.expectedErr {
 				assert.Error(t, err)
 			} else {
 				assert.NoError(t, err)
@@ -297,8 +286,7 @@ func TestBuildNodeFromTemplateSetsResources(t *testing.T) {
 				} else if tc.isEphemeralStorageBlocked {
 					physicalEphemeralStorageGiB = 0
 				}
-				migOsInfo := NewMigOsInfo(OperatingSystemLinux, OperatingSystemDistributionCOS, "")
-				capacity, err := tb.BuildCapacity(migOsInfo, tc.physicalCpu, tc.physicalMemory, tc.accelerators, physicalEphemeralStorageGiB*units.GiB, tc.ephemeralStorageLocalSSDCount, tc.pods, &GceReserved{}, tc.extendedResources)
+				capacity, err := tb.BuildCapacity(tc.physicalCpu, tc.physicalMemory, tc.accelerators, OperatingSystemLinux, OperatingSystemDistributionCOS, "", physicalEphemeralStorageGiB*units.GiB, tc.ephemeralStorageLocalSSDCount, tc.pods, "", &GceReserved{}, tc.extendedResources)
 				assert.NoError(t, err)
 				assertEqualResourceLists(t, "Capacity", capacity, node.Status.Capacity)
 				if !tc.kubeReserved {
@@ -605,8 +593,7 @@ func TestBuildCapacityMemory(t *testing.T) {
 		t.Run(fmt.Sprintf("%v", idx), func(t *testing.T) {
 			tb := GceTemplateBuilder{}
 			noAccelerators := make([]*gce.AcceleratorConfig, 0)
-			migOsInfo := NewMigOsInfo(tc.os, OperatingSystemDistributionCOS, "")
-			buildCapacity, err := tb.BuildCapacity(migOsInfo, tc.physicalCpu, tc.physicalMemory, noAccelerators, -1, 0, nil, &GceReserved{}, apiv1.ResourceList{})
+			buildCapacity, err := tb.BuildCapacity(tc.physicalCpu, tc.physicalMemory, noAccelerators, tc.os, OperatingSystemDistributionCOS, "", -1, 0, nil, "", &GceReserved{}, apiv1.ResourceList{})
 			assert.NoError(t, err)
 			expectedCapacity, err := makeResourceList2(tc.physicalCpu, tc.expectedCapacityMemory, 0, 110)
 			assert.NoError(t, err)
@@ -1410,11 +1397,7 @@ func TestBuildNodeFromTemplateArch(t *testing.T) {
 				},
 			}
 			tb := &GceTemplateBuilder{}
-			migOsInfo, gotErr := tb.MigOsInfo(mig.Id(), template)
-			if gotErr != nil {
-				t.Fatalf("MigOsInfo unexpected error: %v", gotErr)
-			}
-			gotNode, gotErr := tb.BuildNodeFromTemplate(mig, migOsInfo, template, 16, 128, nil, &GceReserved{})
+			gotNode, gotErr := tb.BuildNodeFromTemplate(mig, template, 16, 128, nil, &GceReserved{})
 			if gotErr != nil {
 				t.Fatalf("BuildNodeFromTemplate unexpected error: %v", gotErr)
 			}

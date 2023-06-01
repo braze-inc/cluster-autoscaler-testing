@@ -507,6 +507,7 @@ type LoadBalancerCreateResult struct {
 func (c *LoadBalancerClient) Create(ctx context.Context, opts LoadBalancerCreateOpts) (LoadBalancerCreateResult, *Response, error) {
 	reqBody := loadBalancerCreateOptsToSchema(opts)
 	reqBodyData, err := json.Marshal(reqBody)
+
 	if err != nil {
 		return LoadBalancerCreateResult{}, nil, err
 	}
@@ -880,7 +881,7 @@ func (c *LoadBalancerClient) AttachToNetwork(ctx context.Context, loadBalancer *
 		Network: opts.Network.ID,
 	}
 	if opts.IP != nil {
-		reqBody.IP = Ptr(opts.IP.String())
+		reqBody.IP = String(opts.IP.String())
 	}
 	reqBodyData, err := json.Marshal(reqBody)
 	if err != nil {

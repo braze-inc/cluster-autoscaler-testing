@@ -25,7 +25,7 @@ import (
 
 	"sigs.k8s.io/cloud-provider-azure/pkg/azureclients/vmclient/mockvmclient"
 
-	"github.com/Azure/azure-sdk-for-go/services/compute/mgmt/2022-03-01/compute"
+	"github.com/Azure/azure-sdk-for-go/services/compute/mgmt/2021-07-01/compute"
 	"github.com/Azure/azure-sdk-for-go/services/resources/mgmt/2017-05-10/resources"
 	"github.com/Azure/go-autorest/autorest/date"
 	"github.com/Azure/go-autorest/autorest/to"
@@ -577,39 +577,23 @@ func TestFetchExplicitNodeGroups(t *testing.T) {
 		},
 	}
 
-	orchestrationModes := [2]compute.OrchestrationMode{compute.Uniform, compute.Flexible}
+	manager := newTestAzureManager(t)
 	expectedVMSSVMs := newTestVMSSVMList(3)
-	expectedVMs := newTestVMList(3)
+	expectedScaleSets := newTestVMSSList(3, "test-asg", "eastus")
 
-	for _, orchMode := range orchestrationModes {
-		manager := newTestAzureManager(t)
-		expectedScaleSets := newTestVMSSList(3, "test-asg", "eastus", compute.Uniform)
+	mockVMSSClient := mockvmssclient.NewMockInterface(ctrl)
+	mockVMSSClient.EXPECT().List(gomock.Any(), manager.config.ResourceGroup).Return(expectedScaleSets, nil).AnyTimes()
+	manager.azClient.virtualMachineScaleSetsClient = mockVMSSClient
+	mockVMSSVMClient := mockvmssvmclient.NewMockInterface(ctrl)
+	mockVMSSVMClient.EXPECT().List(gomock.Any(), manager.config.ResourceGroup, "test-asg", gomock.Any()).Return(expectedVMSSVMs, nil).AnyTimes()
+	manager.azClient.virtualMachineScaleSetVMsClient = mockVMSSVMClient
+	manager.fetchExplicitNodeGroups(ngdo.NodeGroupSpecs)
 
-		mockVMSSClient := mockvmssclient.NewMockInterface(ctrl)
-		mockVMSSClient.EXPECT().List(gomock.Any(), manager.config.ResourceGroup).Return(expectedScaleSets, nil).AnyTimes()
-		manager.azClient.virtualMachineScaleSetsClient = mockVMSSClient
-
-		if orchMode == compute.Uniform {
-
-			mockVMSSVMClient := mockvmssvmclient.NewMockInterface(ctrl)
-			mockVMSSVMClient.EXPECT().List(gomock.Any(), manager.config.ResourceGroup, "test-asg", gomock.Any()).Return(expectedVMSSVMs, nil).AnyTimes()
-			manager.azClient.virtualMachineScaleSetVMsClient = mockVMSSVMClient
-		} else {
-
-			mockVMClient := mockvmclient.NewMockInterface(ctrl)
-			manager.config.EnableVmssFlex = true
-			mockVMClient.EXPECT().ListVmssFlexVMsWithoutInstanceView(gomock.Any(), "test-asg").Return(expectedVMs, nil).AnyTimes()
-			manager.azClient.virtualMachinesClient = mockVMClient
-		}
-
-		manager.fetchExplicitNodeGroups(ngdo.NodeGroupSpecs)
-
-		asgs := manager.azureCache.getRegisteredNodeGroups()
-		assert.Equal(t, 1, len(asgs))
-		assert.Equal(t, name, asgs[0].Id())
-		assert.Equal(t, min, asgs[0].MinSize())
-		assert.Equal(t, max, asgs[0].MaxSize())
-	}
+	asgs := manager.azureCache.getRegisteredNodeGroups()
+	assert.Equal(t, 1, len(asgs))
+	assert.Equal(t, name, asgs[0].Id())
+	assert.Equal(t, min, asgs[0].MinSize())
+	assert.Equal(t, max, asgs[0].MaxSize())
 
 	// test vmTypeStandard
 	testAS := newTestAgentPool(newTestAzureManager(t), "testAS")
@@ -634,7 +618,6 @@ func TestFetchExplicitNodeGroups(t *testing.T) {
 	assert.NoError(t, err)
 
 	// test invalidVMType
-	manager := newTestAzureManager(t)
 	manager.config.VMType = "invalidVMType"
 	err = manager.fetchExplicitNodeGroups(ngdo.NodeGroupSpecs)
 	expectedErr = fmt.Errorf("failed to parse node group spec: vmtype invalidVMType not supported")

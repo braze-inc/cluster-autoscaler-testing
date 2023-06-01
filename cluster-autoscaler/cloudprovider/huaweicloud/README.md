@@ -151,7 +151,7 @@ dns: {}
 etcd:
   local:
     dataDir: /var/lib/etcd
-imageRepository: registry.k8s.io
+imageRepository: k8s.gcr.io
 kind: ClusterConfiguration
 kubernetesVersion: 1.22.0
 networking:

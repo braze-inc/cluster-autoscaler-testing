@@ -54,8 +54,7 @@ type ClusterSnapshot interface {
 	Clear()
 }
 
-// ErrNodeNotFound means that a node wasn't found in the snapshot.
-var ErrNodeNotFound = errors.New("node not found")
+var errNodeNotFound = errors.New("node not found")
 
 // WithForkedSnapshot is a helper function for snapshot that makes sure all Fork() calls are closed with Commit() or Revert() calls.
 // The function return (error, error) pair. The first error comes from the passed function, the second error indicate the success of the function itself.

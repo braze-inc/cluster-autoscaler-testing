@@ -142,11 +142,9 @@ spec:
         runAsNonRoot: true
         runAsUser: 65534
         fsGroup: 65534
-        seccompProfile:
-          type: RuntimeDefault
       serviceAccountName: cluster-autoscaler
       containers:
-        - image: registry.k8s.io/autoscaling/cluster-autoscaler:v1.26.2
+        - image: k8s.gcr.io/autoscaling/cluster-autoscaler:v1.22.2
           name: cluster-autoscaler
           resources:
             limits:
@@ -168,12 +166,6 @@ spec:
               mountPath: /etc/ssl/certs/ca-certificates.crt #/etc/ssl/certs/ca-bundle.crt for Amazon Linux Worker Nodes
               readOnly: true
           imagePullPolicy: "Always"
-          securityContext:
-            allowPrivilegeEscalation: false
-            capabilities:
-              drop:
-                - ALL
-            readOnlyRootFilesystem: true
       volumes:
         - name: ssl-certs
           hostPath:

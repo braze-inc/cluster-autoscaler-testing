@@ -22,7 +22,6 @@ import (
 	"math"
 	"math/rand"
 	"strings"
-	"sync"
 	"time"
 
 	apiv1 "k8s.io/api/core/v1"
@@ -45,7 +44,6 @@ type NodeGroup struct {
 
 	Manager     *OvhCloudManager
 	CurrentSize int
-	mutex       sync.Mutex
 }
 
 // MaxSize returns maximum size of the node pool.
@@ -113,12 +111,6 @@ func (ng *NodeGroup) IncreaseSize(delta int) error {
 
 // DeleteNodes deletes the nodes from the group.
 func (ng *NodeGroup) DeleteNodes(nodes []*apiv1.Node) error {
-	// DeleteNodes is called in goroutine so it can run in parallel
-	// Goroutines created in: ScaleDown.scheduleDeleteEmptyNodes()
-	// Adding mutex to ensure CurrentSize attribute keeps consistency
-	ng.mutex.Lock()
-	defer ng.mutex.Unlock()
-
 	// Do not use node group which does not support autoscaling
 	if !ng.Autoscale {
 		return nil
@@ -203,7 +195,7 @@ func (ng *NodeGroup) Nodes() ([]cloudprovider.Instance, error) {
 		instances = append(instances, instance)
 
 		// Store the associated node group in cache for future reference
-		ng.Manager.setNodeGroupPerProviderID(instance.Id, ng)
+		ng.Manager.NodeGroupPerProviderID[instance.Id] = ng
 	}
 
 	return instances, nil
@@ -214,25 +206,17 @@ func (ng *NodeGroup) TemplateNodeInfo() (*schedulerframework.NodeInfo, error) {
 	// Forge node template in a node group
 	node := &apiv1.Node{
 		ObjectMeta: metav1.ObjectMeta{
-			Name:        fmt.Sprintf("%s-node-%d", ng.Id(), rand.Int63()),
-			Labels:      ng.Template.Metadata.Labels,
-			Annotations: ng.Template.Metadata.Annotations,
-			Finalizers:  ng.Template.Metadata.Finalizers,
+			Name: fmt.Sprintf("%s-node-%d", ng.Id(), rand.Int63()),
+			Labels: map[string]string{
+				NodePoolLabel: ng.Id(),
+			},
 		},
-		Spec: apiv1.NodeSpec{
-			Taints: ng.Template.Spec.Taints,
-		},
+		Spec: apiv1.NodeSpec{},
 		Status: apiv1.NodeStatus{
 			Capacity:   apiv1.ResourceList{},
 			Conditions: cloudprovider.BuildReadyConditions(),
 		},
 	}
-
-	// Add the nodepool label
-	if node.ObjectMeta.Labels == nil {
-		node.ObjectMeta.Labels = make(map[string]string)
-	}
-	node.ObjectMeta.Labels[NodePoolLabel] = ng.Id()
 
 	flavor, err := ng.Manager.getFlavorByName(ng.Flavor)
 	if err != nil {

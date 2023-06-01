@@ -29,7 +29,7 @@ func NewFilter() expander.Filter {
 	return &mostpods{}
 }
 
-// BestOptions selects the expansion option that schedules the most pods
+// BestOption Selects the expansion option that schedules the most pods
 func (m *mostpods) BestOptions(expansionOptions []expander.Option, nodeInfo map[string]*schedulerframework.NodeInfo) []expander.Option {
 	var maxPods int
 	var maxOptions []expander.Option

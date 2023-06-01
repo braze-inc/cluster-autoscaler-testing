@@ -21,7 +21,7 @@ package builder
 
 import (
 	"k8s.io/autoscaler/cluster-autoscaler/cloudprovider"
-	oci "k8s.io/autoscaler/cluster-autoscaler/cloudprovider/oci/instancepools"
+	"k8s.io/autoscaler/cluster-autoscaler/cloudprovider/oci"
 	"k8s.io/autoscaler/cluster-autoscaler/config"
 )
 

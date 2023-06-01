@@ -27,7 +27,6 @@ import (
 	"k8s.io/autoscaler/cluster-autoscaler/cloudprovider"
 	"k8s.io/autoscaler/cluster-autoscaler/config"
 	"k8s.io/autoscaler/cluster-autoscaler/utils/errors"
-	"k8s.io/autoscaler/cluster-autoscaler/utils/gpu"
 	klog "k8s.io/klog/v2"
 	schedulerframework "k8s.io/kubernetes/pkg/scheduler/framework"
 )
@@ -79,12 +78,6 @@ func (gce *GceCloudProvider) GPULabel() string {
 // GetAvailableGPUTypes return all available GPU types cloud provider supports
 func (gce *GceCloudProvider) GetAvailableGPUTypes() map[string]struct{} {
 	return availableGPUTypes
-}
-
-// GetNodeGpuConfig returns the label, type and resource name for the GPU added to node. If node doesn't have
-// any GPUs, it returns nil.
-func (gce *GceCloudProvider) GetNodeGpuConfig(node *apiv1.Node) *cloudprovider.GpuConfig {
-	return gpu.GetNodeGPUFromCloudProvider(gce, node)
 }
 
 // NodeGroups returns all node groups configured for this cloud provider.
@@ -189,6 +182,7 @@ type Mig interface {
 	cloudprovider.NodeGroup
 
 	GceRef() GceRef
+	Version() string
 }
 
 type gceMig struct {
@@ -197,6 +191,11 @@ type gceMig struct {
 	gceManager GceManager
 	minSize    int
 	maxSize    int
+}
+
+// Version return the Mig version.
+func (mig *gceMig) Version() string {
+	return ""
 }
 
 // GceRef returns Mig's GceRef
@@ -369,12 +368,12 @@ func BuildGCE(opts config.AutoscalingOptions, do cloudprovider.NodeGroupDiscover
 		defer config.Close()
 	}
 
-	manager, err := CreateGceManager(config, do, opts.Regional, opts.GCEOptions.ConcurrentRefreshes, opts.UserAgent, opts.GCEOptions.MigInstancesMinRefreshWaitTime)
+	manager, err := CreateGceManager(config, do, opts.Regional, opts.ConcurrentGceRefreshes, opts.UserAgent)
 	if err != nil {
 		klog.Fatalf("Failed to create GCE Manager: %v", err)
 	}
 
-	pricingModel := NewGcePriceModel(NewGcePriceInfo(), opts.GCEOptions.ExpanderEphemeralStorageSupport)
+	pricingModel := NewGcePriceModel(NewGcePriceInfo(), opts.GceExpanderEphemeralStorageSupport)
 	provider, err := BuildGceCloudProvider(manager, rl, pricingModel)
 	if err != nil {
 		klog.Fatalf("Failed to create GCE cloud provider: %v", err)

@@ -123,7 +123,7 @@ type gceManagerImpl struct {
 }
 
 // CreateGceManager constructs GceManager object.
-func CreateGceManager(configReader io.Reader, discoveryOpts cloudprovider.NodeGroupDiscoveryOptions, regional bool, concurrentGceRefreshes int, userAgent string, migInstancesMinRefreshWaitTime time.Duration) (GceManager, error) {
+func CreateGceManager(configReader io.Reader, discoveryOpts cloudprovider.NodeGroupDiscoveryOptions, regional bool, concurrentGceRefreshes int, userAgent string) (GceManager, error) {
 	// Create Google Compute Engine token.
 	var err error
 	tokenSource := google.ComputeTokenSource("")
@@ -183,7 +183,7 @@ func CreateGceManager(configReader io.Reader, discoveryOpts cloudprovider.NodeGr
 		cache:                  cache,
 		GceService:             gceService,
 		migLister:              migLister,
-		migInfoProvider:        NewCachingMigInfoProvider(cache, migLister, gceService, projectId, concurrentGceRefreshes, migInstancesMinRefreshWaitTime),
+		migInfoProvider:        NewCachingMigInfoProvider(cache, migLister, gceService, projectId, concurrentGceRefreshes),
 		location:               location,
 		regional:               regional,
 		projectId:              projectId,
@@ -575,9 +575,6 @@ func (m *gceManagerImpl) GetMigOptions(mig Mig, defaults config.NodeGroupAutosca
 	if opt, ok := getDurationOption(options, migRef.Name, config.DefaultScaleDownUnreadyTimeKey); ok {
 		defaults.ScaleDownUnreadyTime = opt
 	}
-	if opt, ok := getDurationOption(options, migRef.Name, config.DefaultMaxNodeProvisionTimeKey); ok {
-		defaults.MaxNodeProvisionTime = opt
-	}
 
 	return &defaults
 }
@@ -592,11 +589,7 @@ func (m *gceManagerImpl) GetMigTemplateNode(mig Mig) (*apiv1.Node, error) {
 	if err != nil {
 		return nil, err
 	}
-	migOsInfo, err := m.templates.MigOsInfo(mig.Id(), template)
-	if err != nil {
-		return nil, err
-	}
-	return m.templates.BuildNodeFromTemplate(mig, migOsInfo, template, machineType.CPU, machineType.Memory, nil, m.reserved)
+	return m.templates.BuildNodeFromTemplate(mig, template, machineType.CPU, machineType.Memory, nil, m.reserved)
 }
 
 // parseMIGAutoDiscoverySpecs returns any provided NodeGroupAutoDiscoverySpecs

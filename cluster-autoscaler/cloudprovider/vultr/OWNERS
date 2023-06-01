@@ -1,9 +1,4 @@
 approvers:
-#- happytreees
-#- optik-aper
+#- ddymko
 reviewers:
-#- happytreees
-#- optik-aper
-
-labels:
-- area/provider/vultr
+#- ddymko

@@ -23,7 +23,6 @@ import (
 
 	"k8s.io/autoscaler/cluster-autoscaler/cloudprovider"
 	testprovider "k8s.io/autoscaler/cluster-autoscaler/cloudprovider/test"
-	"k8s.io/autoscaler/cluster-autoscaler/config"
 	"k8s.io/autoscaler/cluster-autoscaler/context"
 	. "k8s.io/autoscaler/cluster-autoscaler/utils/test"
 
@@ -85,7 +84,7 @@ func basicSimilarNodeGroupsTest(
 func TestFindSimilarNodeGroups(t *testing.T) {
 	context := &context.AutoscalingContext{}
 	ni1, ni2, ni3 := buildBasicNodeGroups(context)
-	processor := NewDefaultNodeGroupSetProcessor([]string{}, config.NodeGroupDifferenceRatios{})
+	processor := NewDefaultNodeGroupSetProcessor([]string{})
 	basicSimilarNodeGroupsTest(t, context, processor, ni1, ni2, ni3)
 }
 
@@ -95,7 +94,7 @@ func TestFindSimilarNodeGroupsCustomLabels(t *testing.T) {
 	ni1.Node().Labels["example.com/ready"] = "true"
 	ni2.Node().Labels["example.com/ready"] = "false"
 
-	processor := NewDefaultNodeGroupSetProcessor([]string{"example.com/ready"}, config.NodeGroupDifferenceRatios{})
+	processor := NewDefaultNodeGroupSetProcessor([]string{"example.com/ready"})
 	basicSimilarNodeGroupsTest(t, context, processor, ni1, ni2, ni3)
 }
 
@@ -113,7 +112,7 @@ func TestFindSimilarNodeGroupsCustomComparator(t *testing.T) {
 }
 
 func TestBalanceSingleGroup(t *testing.T) {
-	processor := NewDefaultNodeGroupSetProcessor([]string{}, config.NodeGroupDifferenceRatios{})
+	processor := NewDefaultNodeGroupSetProcessor([]string{})
 	context := &context.AutoscalingContext{}
 
 	provider := testprovider.NewTestCloudProvider(nil, nil)
@@ -133,7 +132,7 @@ func TestBalanceSingleGroup(t *testing.T) {
 }
 
 func TestBalanceUnderMaxSize(t *testing.T) {
-	processor := NewDefaultNodeGroupSetProcessor([]string{}, config.NodeGroupDifferenceRatios{})
+	processor := NewDefaultNodeGroupSetProcessor([]string{})
 	context := &context.AutoscalingContext{}
 
 	provider := testprovider.NewTestCloudProvider(nil, nil)
@@ -183,7 +182,7 @@ func TestBalanceUnderMaxSize(t *testing.T) {
 }
 
 func TestBalanceHittingMaxSize(t *testing.T) {
-	processor := NewDefaultNodeGroupSetProcessor([]string{}, config.NodeGroupDifferenceRatios{})
+	processor := NewDefaultNodeGroupSetProcessor([]string{})
 	context := &context.AutoscalingContext{}
 
 	provider := testprovider.NewTestCloudProvider(nil, nil)

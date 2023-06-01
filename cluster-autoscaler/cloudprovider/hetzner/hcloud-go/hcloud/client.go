@@ -23,6 +23,7 @@ import (
 	"errors"
 	"fmt"
 	"io"
+	"io/ioutil"
 	"math"
 	"net/http"
 	"net/http/httputil"
@@ -33,7 +34,6 @@ import (
 
 	"github.com/prometheus/client_golang/prometheus"
 	"golang.org/x/net/http/httpguts"
-
 	"k8s.io/autoscaler/cluster-autoscaler/cloudprovider/hetzner/hcloud-go/hcloud/internal/instrumentation"
 	"k8s.io/autoscaler/cluster-autoscaler/cloudprovider/hetzner/hcloud-go/hcloud/schema"
 )
@@ -59,10 +59,7 @@ func ConstantBackoff(d time.Duration) BackoffFunc {
 }
 
 // ExponentialBackoff returns a BackoffFunc which implements an exponential
-// backoff.
-// It uses the formula:
-//
-//	b^retries * d
+// backoff using the formula: b^retries * d
 func ExponentialBackoff(b float64, d time.Duration) BackoffFunc {
 	return func(retries int) time.Duration {
 		return time.Duration(math.Pow(b, float64(retries))) * d
@@ -74,8 +71,8 @@ type Client struct {
 	endpoint                string
 	token                   string
 	tokenValid              bool
+	pollInterval            time.Duration
 	backoffFunc             BackoffFunc
-	pollBackoffFunc         BackoffFunc
 	httpClient              *http.Client
 	applicationName         string
 	applicationVersion      string
@@ -122,31 +119,15 @@ func WithToken(token string) ClientOption {
 	}
 }
 
-// WithPollInterval configures a Client to use the specified interval when
-// polling from the API.
-//
-// Deprecated: Setting the poll interval is deprecated, you can now configure
-// [WithPollBackoffFunc] with a [ConstantBackoff] to get the same results. To
-// migrate your code, replace your usage like this:
-//
-//	// before
-//	hcloud.WithPollInterval(2 * time.Second)
-//	// now
-//	hcloud.WithPollBackoffFunc(hcloud.ConstantBackoff(2 * time.Second))
+// WithPollInterval configures a Client to use the specified interval when polling
+// from the API.
 func WithPollInterval(pollInterval time.Duration) ClientOption {
-	return WithPollBackoffFunc(ConstantBackoff(pollInterval))
-}
-
-// WithPollBackoffFunc configures a Client to use the specified backoff
-// function when polling from the API.
-func WithPollBackoffFunc(f BackoffFunc) ClientOption {
 	return func(client *Client) {
-		client.backoffFunc = f
+		client.pollInterval = pollInterval
 	}
 }
 
 // WithBackoffFunc configures a Client to use the specified backoff function.
-// The backoff function is used for retrying HTTP requests.
 func WithBackoffFunc(f BackoffFunc) ClientOption {
 	return func(client *Client) {
 		client.backoffFunc = f
@@ -188,11 +169,11 @@ func WithInstrumentation(registry *prometheus.Registry) ClientOption {
 // NewClient creates a new client.
 func NewClient(options ...ClientOption) *Client {
 	client := &Client{
-		endpoint:        Endpoint,
-		tokenValid:      true,
-		httpClient:      &http.Client{},
-		backoffFunc:     ExponentialBackoff(2, 500*time.Millisecond),
-		pollBackoffFunc: ConstantBackoff(500 * time.Millisecond),
+		endpoint:     Endpoint,
+		tokenValid:   true,
+		httpClient:   &http.Client{},
+		backoffFunc:  ExponentialBackoff(2, 500*time.Millisecond),
+		pollInterval: 500 * time.Millisecond,
 	}
 
 	for _, option := range options {
@@ -257,7 +238,7 @@ func (c *Client) Do(r *http.Request, v interface{}) (*Response, error) {
 	var body []byte
 	var err error
 	if r.ContentLength > 0 {
-		body, err = io.ReadAll(r.Body)
+		body, err = ioutil.ReadAll(r.Body)
 		if err != nil {
 			r.Body.Close()
 			return nil, err
@@ -266,7 +247,7 @@ func (c *Client) Do(r *http.Request, v interface{}) (*Response, error) {
 	}
 	for {
 		if r.ContentLength > 0 {
-			r.Body = io.NopCloser(bytes.NewReader(body))
+			r.Body = ioutil.NopCloser(bytes.NewReader(body))
 		}
 
 		if c.debugWriter != nil {
@@ -282,13 +263,13 @@ func (c *Client) Do(r *http.Request, v interface{}) (*Response, error) {
 			return nil, err
 		}
 		response := &Response{Response: resp}
-		body, err := io.ReadAll(resp.Body)
+		body, err := ioutil.ReadAll(resp.Body)
 		if err != nil {
 			resp.Body.Close()
 			return response, err
 		}
 		resp.Body.Close()
-		resp.Body = io.NopCloser(bytes.NewReader(body))
+		resp.Body = ioutil.NopCloser(bytes.NewReader(body))
 
 		if c.debugWriter != nil {
 			dumpResp, err := httputil.DumpResponse(resp, true)
@@ -306,7 +287,7 @@ func (c *Client) Do(r *http.Request, v interface{}) (*Response, error) {
 			err = errorFromResponse(resp, body)
 			if err == nil {
 				err = fmt.Errorf("hcloud: server responded with status code %d", resp.StatusCode)
-			} else if isConflict(err) {
+			} else if isRetryable(err) {
 				c.backoff(retries)
 				retries++
 				continue
@@ -325,12 +306,12 @@ func (c *Client) Do(r *http.Request, v interface{}) (*Response, error) {
 	}
 }
 
-func isConflict(error error) bool {
+func isRetryable(error error) bool {
 	err, ok := error.(Error)
 	if !ok {
 		return false
 	}
-	return err.Code == ErrorCodeConflict
+	return err.Code == ErrorCodeRateLimitExceeded || err.Code == ErrorCodeConflict
 }
 
 func (c *Client) backoff(retries int) {

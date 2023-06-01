@@ -27,12 +27,14 @@ import (
 	"k8s.io/autoscaler/cluster-autoscaler/utils/errors"
 
 	apiv1 "k8s.io/api/core/v1"
+	policyv1 "k8s.io/api/policy/v1"
 )
 
 // ScaleDownWrapper wraps legacy scaledown logic to satisfy scaledown.Planner &
 // scaledown.Actuator interfaces.
 type ScaleDownWrapper struct {
 	sd                      *ScaleDown
+	pdbs                    []*policyv1.PodDisruptionBudget
 	actuator                *actuation.Actuator
 	lastNodesToDeleteResult status.ScaleDownResult
 	lastNodesToDeleteErr    errors.AutoscalerError
@@ -47,9 +49,10 @@ func NewScaleDownWrapper(sd *ScaleDown, actuator *actuation.Actuator) *ScaleDown
 }
 
 // UpdateClusterState updates unneeded nodes in the underlying ScaleDown.
-func (p *ScaleDownWrapper) UpdateClusterState(podDestinations, scaleDownCandidates []*apiv1.Node, actuationStatus scaledown.ActuationStatus, currentTime time.Time) errors.AutoscalerError {
+func (p *ScaleDownWrapper) UpdateClusterState(podDestinations, scaleDownCandidates []*apiv1.Node, actuationStatus scaledown.ActuationStatus, pdbs []*policyv1.PodDisruptionBudget, currentTime time.Time) errors.AutoscalerError {
 	p.sd.CleanUp(currentTime)
-	return p.sd.UpdateUnneededNodes(podDestinations, scaleDownCandidates, currentTime)
+	p.pdbs = pdbs
+	return p.sd.UpdateUnneededNodes(podDestinations, scaleDownCandidates, currentTime, pdbs)
 }
 
 // CleanUpUnneededNodes cleans up unneeded nodes.
@@ -82,28 +85,28 @@ func (p *ScaleDownWrapper) NodeUtilizationMap() map[string]utilization.Info {
 // the error returned by legacy TryToScaleDown (now called NodesToDelete) is also passed to StartDeletion.
 // TODO: Evaluate if we can get rid of the last bits of shared state.
 func (p *ScaleDownWrapper) NodesToDelete(currentTime time.Time) (empty, needDrain []*apiv1.Node) {
-	empty, drain, result, err := p.sd.NodesToDelete(currentTime)
+	empty, drain, result, err := p.sd.NodesToDelete(currentTime, p.pdbs)
 	p.lastNodesToDeleteResult = result
 	p.lastNodesToDeleteErr = err
 	return empty, drain
 }
 
 // StartDeletion triggers an actual scale down logic.
-func (p *ScaleDownWrapper) StartDeletion(empty, needDrain []*apiv1.Node) (*status.ScaleDownStatus, errors.AutoscalerError) {
+func (p *ScaleDownWrapper) StartDeletion(empty, needDrain []*apiv1.Node, currentTime time.Time) (*status.ScaleDownStatus, errors.AutoscalerError) {
 	// Done to preserve legacy behavior, see comment on NodesToDelete.
 	if p.lastNodesToDeleteErr != nil || p.lastNodesToDeleteResult != status.ScaleDownNodeDeleteStarted {
 		// When there is no need for scale-down, p.lastNodesToDeleteResult is set to ScaleDownNoUnneeded. We have to still report node delete
 		// results in this case, otherwise they wouldn't get reported until the next call to actuator.StartDeletion (i.e. until the next scale-down
 		// attempt).
 		// Run actuator.StartDeletion with no nodes just to grab the delete results.
-		origStatus, _ := p.actuator.StartDeletion(nil, nil)
+		origStatus, _ := p.actuator.StartDeletion(nil, nil, currentTime)
 		return &status.ScaleDownStatus{
 			Result:                p.lastNodesToDeleteResult,
 			NodeDeleteResults:     origStatus.NodeDeleteResults,
 			NodeDeleteResultsAsOf: origStatus.NodeDeleteResultsAsOf,
 		}, p.lastNodesToDeleteErr
 	}
-	return p.actuator.StartDeletion(empty, needDrain)
+	return p.actuator.StartDeletion(empty, needDrain, currentTime)
 }
 
 // CheckStatus snapshots current deletion status

@@ -36,10 +36,10 @@ import (
 	"k8s.io/autoscaler/cluster-autoscaler/simulator"
 	"k8s.io/autoscaler/cluster-autoscaler/simulator/clustersnapshot"
 	"k8s.io/autoscaler/cluster-autoscaler/simulator/utilization"
+	"k8s.io/autoscaler/cluster-autoscaler/utils/deletetaint"
 	"k8s.io/autoscaler/cluster-autoscaler/utils/errors"
 	"k8s.io/autoscaler/cluster-autoscaler/utils/gpu"
 	kube_util "k8s.io/autoscaler/cluster-autoscaler/utils/kubernetes"
-	"k8s.io/autoscaler/cluster-autoscaler/utils/taints"
 	"k8s.io/kubernetes/pkg/scheduler/framework"
 )
 
@@ -66,9 +66,12 @@ func NewActuator(ctx *context.AutoscalingContext, csr *clusterstate.ClusterState
 	}
 }
 
-// CheckStatus should returns an immutable snapshot of ongoing deletions.
+// CheckStatus should return an immutable snapshot of ongoing deletions. Before the TODO is addressed, a live object
+// is returned instead of an immutable snapshot.
 func (a *Actuator) CheckStatus() scaledown.ActuationStatus {
-	return a.nodeDeletionTracker.Snapshot()
+	// TODO: snapshot information from the tracker instead of keeping live
+	// updated object.
+	return a.nodeDeletionTracker
 }
 
 // ClearResultsNotNewerThan removes information about deletions finished before or exactly at the provided timestamp.
@@ -77,10 +80,8 @@ func (a *Actuator) ClearResultsNotNewerThan(t time.Time) {
 }
 
 // StartDeletion triggers a new deletion process.
-func (a *Actuator) StartDeletion(empty, drain []*apiv1.Node) (*status.ScaleDownStatus, errors.AutoscalerError) {
-	deletionStartTime := time.Now()
-	defer func() { metrics.UpdateDuration(metrics.ScaleDownNodeDeletion, time.Now().Sub(deletionStartTime)) }()
-
+func (a *Actuator) StartDeletion(empty, drain []*apiv1.Node, currentTime time.Time) (*status.ScaleDownStatus, errors.AutoscalerError) {
+	defer func() { metrics.UpdateDuration(metrics.ScaleDownNodeDeletion, time.Now().Sub(currentTime)) }()
 	results, ts := a.nodeDeletionTracker.DeletionResults()
 	scaleDownStatus := &status.ScaleDownStatus{NodeDeleteResults: results, NodeDeleteResultsAsOf: ts}
 
@@ -192,7 +193,7 @@ func (a *Actuator) taintNodesSync(nodes []*apiv1.Node) errors.AutoscalerError {
 			a.ctx.Recorder.Eventf(node, apiv1.EventTypeWarning, "ScaleDownFailed", "failed to mark the node as toBeDeleted/unschedulable: %v", err)
 			// Clean up already applied taints in case of issues.
 			for _, taintedNode := range taintedNodes {
-				_, _ = taints.CleanToBeDeleted(taintedNode, a.ctx.ClientSet, a.ctx.CordonNodeBeforeTerminate)
+				_, _ = deletetaint.CleanToBeDeleted(taintedNode, a.ctx.ClientSet, a.ctx.CordonNodeBeforeTerminate)
 			}
 			return errors.NewAutoscalerError(errors.ApiCallError, "couldn't taint node %q with ToBeDeleted", node)
 		}
@@ -306,8 +307,7 @@ func (a *Actuator) scaleDownNodeToReport(node *apiv1.Node, drain bool) (*status.
 	if err != nil {
 		return nil, err
 	}
-	gpuConfig := a.ctx.CloudProvider.GetNodeGpuConfig(node)
-	utilInfo, err := utilization.Calculate(nodeInfo, a.ctx.IgnoreDaemonSetsUtilization, a.ctx.IgnoreMirrorPodsUtilization, gpuConfig, time.Now())
+	utilInfo, err := utilization.Calculate(nodeInfo, a.ctx.IgnoreDaemonSetsUtilization, a.ctx.IgnoreMirrorPodsUtilization, a.ctx.CloudProvider.GPULabel(), time.Now())
 	if err != nil {
 		return nil, err
 	}
@@ -326,7 +326,7 @@ func (a *Actuator) scaleDownNodeToReport(node *apiv1.Node, drain bool) (*status.
 
 // taintNode taints the node with NoSchedule to prevent new pods scheduling on it.
 func (a *Actuator) taintNode(node *apiv1.Node) error {
-	if err := taints.MarkToBeDeleted(node, a.ctx.ClientSet, a.ctx.CordonNodeBeforeTerminate); err != nil {
+	if err := deletetaint.MarkToBeDeleted(node, a.ctx.ClientSet, a.ctx.CordonNodeBeforeTerminate); err != nil {
 		a.ctx.Recorder.Eventf(node, apiv1.EventTypeWarning, "ScaleDownFailed", "failed to mark the node as toBeDeleted/unschedulable: %v", err)
 		return errors.ToAutoscalerError(errors.ApiCallError, err)
 	}
@@ -423,7 +423,7 @@ func CleanUpAndRecordFailedScaleDownEvent(ctx *context.AutoscalingContext, node 
 		klog.Errorf("Scale-down: couldn't delete empty node, %v, status error: %v", errMsg, status.Err)
 		ctx.Recorder.Eventf(node, apiv1.EventTypeWarning, "ScaleDownFailed", "failed to delete empty node: %v", status.Err)
 	}
-	taints.CleanToBeDeleted(node, ctx.ClientSet, ctx.CordonNodeBeforeTerminate)
+	deletetaint.CleanToBeDeleted(node, ctx.ClientSet, ctx.CordonNodeBeforeTerminate)
 	nodeDeletionTracker.EndDeletion(nodeGroupId, node.Name, status)
 }
 
@@ -436,9 +436,7 @@ func RegisterAndRecordSuccessfulScaleDownEvent(ctx *context.AutoscalingContext, 
 		Time:               time.Now(),
 		ExpectedDeleteTime: time.Now().Add(MaxCloudProviderNodeDeletionTime),
 	})
-	gpuConfig := ctx.CloudProvider.GetNodeGpuConfig(node)
-	metricResourceName, metricGpuType := gpu.GetGpuInfoForMetrics(gpuConfig, ctx.CloudProvider.GetAvailableGPUTypes(), node, nodeGroup)
-	metrics.RegisterScaleDown(1, metricResourceName, metricGpuType, nodeScaleDownReason(node, drain))
+	metrics.RegisterScaleDown(1, gpu.GetGpuTypeForMetrics(ctx.CloudProvider.GPULabel(), ctx.CloudProvider.GetAvailableGPUTypes(), node, nodeGroup), nodeScaleDownReason(node, drain))
 	if drain {
 		ctx.LogRecorder.Eventf(apiv1.EventTypeNormal, "ScaleDown", "Scale-down: node %s removed with drain", node.Name)
 	} else {

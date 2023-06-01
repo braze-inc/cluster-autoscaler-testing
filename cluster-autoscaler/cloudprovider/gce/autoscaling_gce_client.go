@@ -77,7 +77,6 @@ type AutoscalingGceClient interface {
 	FetchMigsWithName(zone string, filter *regexp.Regexp) ([]string, error)
 	FetchZones(region string) ([]string, error)
 	FetchAvailableCpuPlatforms() (map[string][]string, error)
-	FetchReservations() ([]*gce.Reservation, error)
 
 	// modifying resources
 	ResizeMig(GceRef, int64) error
@@ -203,10 +202,13 @@ func (client *autoscalingGceClientV1) ResizeMig(migRef GceRef, size int64) error
 	return client.waitForOp(op, migRef.Project, migRef.Zone, false)
 }
 
-func (client *autoscalingGceClientV1) CreateInstances(migRef GceRef, baseName string, delta int64, existingInstanceProviderIds []string) error {
+func (client *autoscalingGceClientV1) CreateInstances(migRef GceRef, baseName string, delta int64, existingInstances []string) error {
 	registerRequest("instance_group_managers", "create_instances")
 	req := gce.InstanceGroupManagersCreateInstancesRequest{}
-	instanceNames := instanceIdsToNamesMap(existingInstanceProviderIds)
+	instanceNames := map[string]bool{}
+	for _, inst := range existingInstances {
+		instanceNames[inst] = true
+	}
 	req.Instances = make([]*gce.PerInstanceConfig, 0, delta)
 	for i := int64(0); i < delta; i++ {
 		newInstanceName := generateInstanceName(baseName, instanceNames)
@@ -218,20 +220,6 @@ func (client *autoscalingGceClientV1) CreateInstances(migRef GceRef, baseName st
 		return err
 	}
 	return client.waitForOp(op, migRef.Project, migRef.Zone, false)
-}
-
-func instanceIdsToNamesMap(instanceProviderIds []string) map[string]bool {
-	instanceNames := make(map[string]bool, len(instanceProviderIds))
-	for _, inst := range instanceProviderIds {
-		ref, err := GceRefFromProviderId(inst)
-		if err != nil {
-			klog.Warningf("Failed to extract instance name from %q: %v", inst, err)
-		} else {
-			inst = ref.Name
-		}
-		instanceNames[inst] = true
-	}
-	return instanceNames
 }
 
 func (client *autoscalingGceClientV1) waitForOp(operation *gce.Operation, project, zone string, isDeletion bool) error {
@@ -291,38 +279,63 @@ func (client *autoscalingGceClientV1) FetchMigInstances(migRef GceRef) ([]cloudp
 	for _, gceInstance := range gceInstances.ManagedInstances {
 		ref, err := ParseInstanceUrlRef(gceInstance.Instance)
 		if err != nil {
-			klog.Errorf("Received error while parsing of the instance url: %v", err)
-			continue
+			return nil, err
 		}
 
 		instance := cloudprovider.Instance{
-			Id: ref.ToProviderId(),
-			Status: &cloudprovider.InstanceStatus{
-				State: getInstanceState(gceInstance.CurrentAction),
-			},
+			Id:     ref.ToProviderId(),
+			Status: &cloudprovider.InstanceStatus{},
+		}
+
+		switch gceInstance.CurrentAction {
+		case "CREATING", "RECREATING", "CREATING_WITHOUT_RETRIES":
+			instance.Status.State = cloudprovider.InstanceCreating
+		case "ABANDONING", "DELETING":
+			instance.Status.State = cloudprovider.InstanceDeleting
+		default:
+			instance.Status.State = cloudprovider.InstanceRunning
 		}
 
 		if instance.Status.State == cloudprovider.InstanceCreating {
-			var errorInfo *cloudprovider.InstanceErrorInfo
+			var errorInfo cloudprovider.InstanceErrorInfo
 			errorMessages := []string{}
+			errorFound := false
 			lastAttemptErrors := getLastAttemptErrors(gceInstance)
 			for _, instanceError := range lastAttemptErrors {
 				errorCodeCounts[instanceError.Code]++
-				if newErrorInfo := GetErrorInfo(instanceError.Code, instanceError.Message, gceInstance.InstanceStatus, errorInfo); newErrorInfo != nil {
-					// override older error
-					errorInfo = newErrorInfo
+				if isResourcePoolExhaustedErrorCode(instanceError.Code) {
+					errorInfo.ErrorClass = cloudprovider.OutOfResourcesErrorClass
+					errorInfo.ErrorCode = ErrorCodeResourcePoolExhausted
+				} else if isQuotaExceededErrorCode(instanceError.Code) {
+					errorInfo.ErrorClass = cloudprovider.OutOfResourcesErrorClass
+					errorInfo.ErrorCode = ErrorCodeQuotaExceeded
+				} else if isIPSpaceExhaustedErrorCode(instanceError.Code) {
+					errorInfo.ErrorClass = cloudprovider.OtherErrorClass
+					errorInfo.ErrorCode = ErrorIPSpaceExhausted
+				} else if isPermissionsError(instanceError.Code) {
+					errorInfo.ErrorClass = cloudprovider.OtherErrorClass
+					errorInfo.ErrorCode = ErrorCodePermissions
+				} else if isVmExternalIpAccessPolicyConstraintError(instanceError) {
+					errorInfo.ErrorClass = cloudprovider.OtherErrorClass
+					errorInfo.ErrorCode = ErrorCodeVmExternalIpAccessPolicyConstraint
+				} else if isInstanceNotRunningYet(gceInstance) {
+					if !errorFound {
+						// do not override error code with OTHER
+						errorInfo.ErrorClass = cloudprovider.OtherErrorClass
+						errorInfo.ErrorCode = ErrorCodeOther
+					}
 				} else {
 					// no error
 					continue
 				}
-
+				errorFound = true
 				if instanceError.Message != "" {
 					errorMessages = append(errorMessages, instanceError.Message)
 				}
 			}
-			if errorInfo != nil {
-				errorInfo.ErrorMessage = strings.Join(errorMessages, "; ")
-				instance.Status.ErrorInfo = errorInfo
+			errorInfo.ErrorMessage = strings.Join(errorMessages, "; ")
+			if errorFound {
+				instance.Status.ErrorInfo = &errorInfo
 			}
 
 			if len(lastAttemptErrors) > 0 {
@@ -343,57 +356,6 @@ func (client *autoscalingGceClientV1) FetchMigInstances(migRef GceRef) ([]cloudp
 		klog.Warningf("Spotted following instance creation error codes: %#v", errorCodeCounts)
 	}
 	return infos, nil
-}
-
-// GetErrorInfo maps the error code, error message and instance status to CA instance error info
-func GetErrorInfo(errorCode, errorMessage, instanceStatus string, previousErrorInfo *cloudprovider.InstanceErrorInfo) *cloudprovider.InstanceErrorInfo {
-	if isResourcePoolExhaustedErrorCode(errorCode) {
-		return &cloudprovider.InstanceErrorInfo{
-			ErrorClass: cloudprovider.OutOfResourcesErrorClass,
-			ErrorCode:  ErrorCodeResourcePoolExhausted,
-		}
-	} else if isQuotaExceededErrorCode(errorCode) {
-		return &cloudprovider.InstanceErrorInfo{
-			ErrorClass: cloudprovider.OutOfResourcesErrorClass,
-			ErrorCode:  ErrorCodeQuotaExceeded,
-		}
-	} else if isIPSpaceExhaustedErrorCode(errorCode) {
-		return &cloudprovider.InstanceErrorInfo{
-			ErrorClass: cloudprovider.OtherErrorClass,
-			ErrorCode:  ErrorIPSpaceExhausted,
-		}
-	} else if isPermissionsError(errorCode) {
-		return &cloudprovider.InstanceErrorInfo{
-			ErrorClass: cloudprovider.OtherErrorClass,
-			ErrorCode:  ErrorCodePermissions,
-		}
-	} else if isVmExternalIpAccessPolicyConstraintError(errorCode, errorMessage) {
-		return &cloudprovider.InstanceErrorInfo{
-			ErrorClass: cloudprovider.OtherErrorClass,
-			ErrorCode:  ErrorCodeVmExternalIpAccessPolicyConstraint,
-		}
-	} else if isInstanceStatusNotRunningYet(instanceStatus) {
-		if previousErrorInfo != nil {
-			// keep the current error
-			return previousErrorInfo
-		}
-		return &cloudprovider.InstanceErrorInfo{
-			ErrorClass: cloudprovider.OtherErrorClass,
-			ErrorCode:  ErrorCodeOther,
-		}
-	}
-	return nil
-}
-
-func getInstanceState(currentAction string) cloudprovider.InstanceState {
-	switch currentAction {
-	case "CREATING", "RECREATING", "CREATING_WITHOUT_RETRIES":
-		return cloudprovider.InstanceCreating
-	case "ABANDONING", "DELETING":
-		return cloudprovider.InstanceDeleting
-	default:
-		return cloudprovider.InstanceRunning
-	}
 }
 
 func getLastAttemptErrors(instance *gce.ManagedInstance) []*gce.ManagedInstanceLastAttemptErrorsErrors {
@@ -419,13 +381,13 @@ func isPermissionsError(errorCode string) bool {
 	return strings.Contains(errorCode, "PERMISSIONS_ERROR")
 }
 
-func isVmExternalIpAccessPolicyConstraintError(errorCode, errorMessage string) bool {
+func isVmExternalIpAccessPolicyConstraintError(err *gce.ManagedInstanceLastAttemptErrorsErrors) bool {
 	regexProjectPolicyConstraint := regexp.MustCompile(`Constraint constraints/compute.vmExternalIpAccess violated for project`)
-	return strings.Contains(errorCode, "CONDITION_NOT_MET") && regexProjectPolicyConstraint.MatchString(errorMessage)
+	return strings.Contains(err.Code, "CONDITION_NOT_MET") && regexProjectPolicyConstraint.MatchString(err.Message)
 }
 
-func isInstanceStatusNotRunningYet(instanceStatus string) bool {
-	return instanceStatus == "" || instanceStatus == "PROVISIONING" || instanceStatus == "STAGING"
+func isInstanceNotRunningYet(gceInstance *gce.ManagedInstance) bool {
+	return gceInstance.InstanceStatus == "" || gceInstance.InstanceStatus == "PROVISIONING" || gceInstance.InstanceStatus == "STAGING"
 }
 
 func generateInstanceName(baseName string, existingNames map[string]bool) string {
@@ -508,16 +470,4 @@ func (client *autoscalingGceClientV1) FetchMigsWithName(zone string, name *regex
 		return nil, fmt.Errorf("cannot list managed instance groups: %v", err)
 	}
 	return links, nil
-}
-
-func (client *autoscalingGceClientV1) FetchReservations() ([]*gce.Reservation, error) {
-	reservations := make([]*gce.Reservation, 0)
-	call := client.gceService.Reservations.AggregatedList(client.projectId)
-	err := call.Pages(context.TODO(), func(ls *gce.ReservationAggregatedList) error {
-		for _, items := range ls.Items {
-			reservations = append(reservations, items.Reservations...)
-		}
-		return nil
-	})
-	return reservations, err
 }

@@ -119,24 +119,19 @@ func (n *Nodes) Drop(node string) {
 // unneeded, but are not removable, annotated by reason.
 func (n *Nodes) RemovableAt(context *context.AutoscalingContext, ts time.Time, resourcesLeft resource.Limits, resourcesWithLimits []string, as scaledown.ActuationStatus) (empty, needDrain []simulator.NodeToBeRemoved, unremovable []*simulator.UnremovableNode) {
 	nodeGroupSize := utils.GetNodeGroupSizeMap(context.CloudProvider)
-	resourcesLeftCopy := resourcesLeft.DeepCopy()
-	emptyNodes, drainNodes := n.splitEmptyAndNonEmptyNodes()
+	for nodeName, v := range n.byName {
+		klog.V(2).Infof("%s was unneeded for %s", nodeName, ts.Sub(v.since).String())
 
-	for nodeName, v := range emptyNodes {
-		klog.V(2).Infof("%s was unneeded for %s", nodeName, ts.Sub(v.since).String())
-		if r := n.unremovableReason(context, v, ts, nodeGroupSize, resourcesLeftCopy, resourcesWithLimits, as); r != simulator.NoReason {
+		if r := n.unremovableReason(context, v, ts, nodeGroupSize, resourcesLeft, resourcesWithLimits, as); r != simulator.NoReason {
 			unremovable = append(unremovable, &simulator.UnremovableNode{Node: v.ntbr.Node, Reason: r})
 			continue
 		}
-		empty = append(empty, v.ntbr)
-	}
-	for nodeName, v := range drainNodes {
-		klog.V(2).Infof("%s was unneeded for %s", nodeName, ts.Sub(v.since).String())
-		if r := n.unremovableReason(context, v, ts, nodeGroupSize, resourcesLeftCopy, resourcesWithLimits, as); r != simulator.NoReason {
-			unremovable = append(unremovable, &simulator.UnremovableNode{Node: v.ntbr.Node, Reason: r})
-			continue
+
+		if len(v.ntbr.PodsToReschedule) > 0 {
+			needDrain = append(needDrain, v.ntbr)
+		} else {
+			empty = append(empty, v.ntbr)
 		}
-		needDrain = append(needDrain, v.ntbr)
 	}
 	return
 }
@@ -182,8 +177,16 @@ func (n *Nodes) unremovableReason(context *context.AutoscalingContext, v *node, 
 		}
 	}
 
-	if reason := verifyMinSize(node.Name, nodeGroup, nodeGroupSize, as); reason != simulator.NoReason {
-		return reason
+	size, found := nodeGroupSize[nodeGroup.Id()]
+	if !found {
+		klog.Errorf("Error while checking node group size %s: group size not found in cache", nodeGroup.Id())
+		return simulator.UnexpectedError
+	}
+
+	deletionsInProgress := as.DeletionsCount(nodeGroup.Id())
+	if size-deletionsInProgress <= nodeGroup.MinSize() {
+		klog.V(1).Infof("Skipping %s - node group min size reached", node.Name)
+		return simulator.NodeGroupMinSizeReached
 	}
 
 	resourceDelta, err := n.limitsFinder.DeltaForNode(context, node, nodeGroup, resourcesWithLimits)
@@ -192,7 +195,7 @@ func (n *Nodes) unremovableReason(context *context.AutoscalingContext, v *node, 
 		return simulator.UnexpectedError
 	}
 
-	checkResult := resourcesLeft.TryDecrementBy(resourceDelta)
+	checkResult := resourcesLeft.CheckDeltaWithinLimits(resourceDelta)
 	if checkResult.Exceeded() {
 		klog.V(4).Infof("Skipping %s - minimal limit exceeded for %v", node.Name, checkResult.ExceededResources)
 		for _, resource := range checkResult.ExceededResources {
@@ -208,33 +211,5 @@ func (n *Nodes) unremovableReason(context *context.AutoscalingContext, v *node, 
 		return simulator.MinimalResourceLimitExceeded
 	}
 
-	nodeGroupSize[nodeGroup.Id()]--
-	return simulator.NoReason
-}
-
-func (n *Nodes) splitEmptyAndNonEmptyNodes() (empty, needDrain map[string]*node) {
-	empty = make(map[string]*node)
-	needDrain = make(map[string]*node)
-	for name, v := range n.byName {
-		if len(v.ntbr.PodsToReschedule) > 0 {
-			needDrain[name] = v
-		} else {
-			empty[name] = v
-		}
-	}
-	return
-}
-
-func verifyMinSize(nodeName string, nodeGroup cloudprovider.NodeGroup, nodeGroupSize map[string]int, as scaledown.ActuationStatus) simulator.UnremovableReason {
-	size, found := nodeGroupSize[nodeGroup.Id()]
-	if !found {
-		klog.Errorf("Error while checking node group size %s: group size not found in cache", nodeGroup.Id())
-		return simulator.UnexpectedError
-	}
-	deletionsInProgress := as.DeletionsCount(nodeGroup.Id())
-	if size-deletionsInProgress <= nodeGroup.MinSize() {
-		klog.V(1).Infof("Skipping %s - node group min size reached", nodeName)
-		return simulator.NodeGroupMinSizeReached
-	}
 	return simulator.NoReason
 }
